@@ -1,0 +1,65 @@
+```{r}
+
+```
+
+---
+title: "tratrzańskie modelowanie"
+output: html_document
+date: "2025-11-05"
+---
+
+## Pobranie danych
+
+```{r}
+library("rgbif")
+library(sf)
+library(ggplot2)
+library(ggspatial)
+library(RColorBrewer)
+```
+
+```{r}
+lista_gatunków <- read.csv("gatunki.csv",header = TRUE, sep = ";")
+lista_gatunków
+```
+
+```{r}
+sp_name <- "Cochlearia tatrae	"
+sp_tatrea <- name_backbone(name = sp_name)
+sp_key <- sp_tatrea$usageKey
+sp_key
+```
+
+```{r}
+occ_count(taxonKey = sp_key)
+```
+
+```{r}
+#Pobranie danych przy pomocy klucza
+data <- occ_data(
+  taxonKey = sp_key
+)
+```
+
+```{r}
+df <- as.data.frame(data)
+```
+
+```{r}
+res <-data.frame(data)
+museums_sf <- st_as_sf(res, coords=c("longitude", "latitude"),
+                     crs="EPSG:4326") 
+```
+
+```{r}
+data_subset <- data[
+  ,
+  c("scientificName", "decimalLongitude", "decimalLatitude", "datasetKey")]
+
+options(digits = 8) ## set 8 digits (ie. all digits, not decimals) for the type cast as.double to keep decimals
+data_subset <- as.data.frame(data_subset)
+data_subset$lon <- as.double(data_subset$decimalLongitude) ## cast lon from char to double
+data_subset$lat <- as.double(data_subset$decimalLatitude) ## cast lat from char to double
+data_sf <- st_as_sf(data_subset, coords = c("lon", "lat"), remove = FALSE)
+st_crs(data_sf) <- CRS("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0")
+```
