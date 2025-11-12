@@ -1,30 +1,61 @@
-```{r}
-
-```
-
 ---
 title: "tratrzańskie modelowanie"
 output: html_document
 date: "2025-11-05"
 ---
 
-## Pobranie danych
-
 ```{r}
-library("rgbif")
+library(rgbif)
 library(sf)
+library(tidyverse)
 library(ggplot2)
 library(ggspatial)
 library(RColorBrewer)
+library(rnaturalearth)
 ```
+
+## Ważne linki
+
+<https://r.geocompx.org/>
+
+<https://www.erikkusch.com/courses/gbif/>
+
+# Pobieranie i czyszczenie danych
+
+## Pobieranie mapy
+
+```{r}
+alps_map <- ne_countries(country = c("Switzerland", "Germany", "Italy"),
+                         scale = "medium",
+                         returnclass = "sf")
+```
+
+```{r}
+tatra_map <- ne_countries(country =c( "Poland", "Slovakia"),
+                            scale = "medium",
+                            returnclass = "sf")
+```
+
+## Pobranie danych
 
 ```{r}
 lista_gatunków <- read.csv("gatunki.csv",header = TRUE, sep = ";")
 lista_gatunków
 ```
 
+|                    |                                       |
+|:-------------------|---------------------------------------|
+| Cochlearia tatrae  | tylko tatry i 1 norwegia              |
+| Draba siliquosa    | dużo alp i kazbek                     |
+| Draba dubia        | dużo alp                              |
+| Draba fladnizensis | dużo wszędzie mało tatry              |
+| Draba tomentosa    | dużo alpy mało tatry                  |
+| Woodsia alpina     | dużo wszędzie mało tatry              |
+| Woodsia pulchella  | mało alpy, brak tatry, trochę bajkał? |
+| Poa granitica      | brak alpy głównie tatry               |
+
 ```{r}
-sp_name <- "Cochlearia tatrae	"
+sp_name <- "Draba dubia	"
 sp_tatrea <- name_backbone(name = sp_name)
 sp_key <- sp_tatrea$usageKey
 sp_key
@@ -35,31 +66,54 @@ occ_count(taxonKey = sp_key)
 ```
 
 ```{r}
-#Pobranie danych przy pomocy klucza
-data <- occ_data(
-  taxonKey = sp_key
-)
+gbif_download_key <- occ_download(pred("taxonKey", sp_key),
+                              format = "SIMPLE_CSV",
+                             user = "kajsyr",
+                             pwd = "BiojestOK+05",
+                             email = "jan.rysiak@student.uj.edu.pl")
 ```
 
 ```{r}
-df <- as.data.frame(data)
+occ_download_wait(gbif_download_key)
+
+gbif_download <- occ_download_get(gbif_download_key, 
+                                  overwrite = TRUE) %>% 
+                 occ_download_import() %>% 
+                 setNames(tolower(names(.)))
+
+head(gbif_download, 10) 
 ```
 
 ```{r}
-res <-data.frame(data)
-museums_sf <- st_as_sf(res, coords=c("longitude", "latitude"),
-                     crs="EPSG:4326") 
+head(data$data)
 ```
 
 ```{r}
-data_subset <- data[
-  ,
-  c("scientificName", "decimalLongitude", "decimalLatitude", "datasetKey")]
+gbif_download %>% count(countrycode)
+```
 
-options(digits = 8) ## set 8 digits (ie. all digits, not decimals) for the type cast as.double to keep decimals
-data_subset <- as.data.frame(data_subset)
-data_subset$lon <- as.double(data_subset$decimalLongitude) ## cast lon from char to double
-data_subset$lat <- as.double(data_subset$decimalLatitude) ## cast lat from char to double
-data_sf <- st_as_sf(data_subset, coords = c("lon", "lat"), remove = FALSE)
-st_crs(data_sf) <- CRS("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0")
+```{r}
+gbif_tatry<- gbif_download %>% filter(countrycode==c("SK", "PL"))
+
+ggplot() +
+  geom_sf(data = tatra_map) +
+  geom_point(data = gbif_tatry,
+             aes(x = decimallongitude,
+                 y = decimallatitude),
+             shape = "+",
+             color = "red") +
+  theme_bw()
+```
+
+```{r}
+gbif_alps<- gbif_download %>% filter(countrycode==c("DE", "IT", "CH"))
+
+ggplot() +
+  geom_sf(data = alps_map) +
+  geom_point(data = gbif_alps,
+             aes(x = decimallongitude,
+                 y = decimallatitude),
+             shape = "+",
+             color = "red") +
+  theme_bw()
 ```

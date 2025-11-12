@@ -19,6 +19,7 @@ library(sf)                 #for manipulating downloaded maps
 library(tidyverse)          #for tidy analysis
 library(CoordinateCleaner)  #for quality checking of occurrence data
 ```
+
 # preparing plotting variables (miscellaneous variables)
 
 ### Downloading world map
@@ -34,8 +35,6 @@ country_map <- ne_countries(country = "Madagascar",
                             scale = "medium",
                             returnclass = "sf")
 ```
-
-
 
 # Dowloading GBIF datasets
 
@@ -59,7 +58,6 @@ usageKey <- name_backbone(name = "Lemur catta", rank = "species") %>%
 
 ```
 
-
 Looks like there are a lot of possible taxon keys for *Lemur catta*. I searched it in GBIF taxonomic backbone instead: 2436412
 
 ## Sending request to download file
@@ -71,7 +69,6 @@ gbif_download_key <- occ_download(pred("taxonKey", 2436412),
                              pwd = "******",
                              email = "*******")
 ```
-
 
 ## Actually downloading the file
 
@@ -92,8 +89,7 @@ head(gbif_download, 10) #view first ten rows
 print(gbif_citation(occ_download_meta(gbif_download_key))$download)
 ```
 
-
-*Lemur catta* is native to Madagascar; but just to make sure, let's check where else it can be found 
+*Lemur catta* is native to Madagascar; but just to make sure, let's check where else it can be found
 
 ```{r, message = FALSE, error = FALSE}
 ggplot() +
@@ -113,9 +109,6 @@ Wheps! seems like there are unusual occurrences outside its native range. Let's 
 ```{r}
 table(gbif_download$countrycode)
 ```
-
-
-
 
 # Data cleaning Step 1
 
@@ -151,7 +144,6 @@ ggplot() +
              color = "red") +
   theme_bw()
 ```
-
 
 # Data cleaning step 2
 
@@ -197,7 +189,6 @@ The black "+" markers indicate the occurrences of the raw dataset; whereas the r
 
 ### Zooming in to madagascar
 
-
 ```{r}
 ggplot() +
   geom_sf(data = country_map) +
@@ -215,7 +206,6 @@ ggplot() +
            ylim = st_bbox(country_map)[c(2,4)]) +
   theme_bw()
 ```
-
 
 # Data cleaning step 3
 
@@ -254,7 +244,6 @@ ggplot() +
 
 Oh no! we only have 14 records left.
 
-
 # Data cleaning step 4
 
 Further removing records with temporal range outside that of our predictor variables
@@ -265,7 +254,6 @@ clean_step4 <- clean_step3 %>%
 print(paste0(nrow(gbif_download)-nrow(clean_step3), " records deleted; ",
              nrow(clean_step4), " records remaining." )) 
 ```
-
 
 ```{r}
 ggplot() +
