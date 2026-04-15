@@ -1,0 +1,14 @@
+# 1. Ignore everything in the root
+/*
+/pipeline/work/
+/pipeline/output/
+/pipeline/.nextflow*
+/pipeline/input/
+
+#Śledź tylko pipeline
+!/pipeline/
+
+# 3. Re-include the .gitignore itself (optional but recommended)
+!.gitignore
+
+

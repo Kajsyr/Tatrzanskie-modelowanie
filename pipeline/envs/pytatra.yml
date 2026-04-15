@@ -1,0 +1,17 @@
+name: pytatry
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - pandas              # Manipulacja danymi (odpowiednik dplyr)
+  - geopandas           # Dane wektorowe (odpowiednik sf)
+  - rasterio            # Dane rastrowe
+  - xarray              # Wielowymiarowe tablice danych
+  - matplotlib          # Wykresy
+  - seaborn             # Statystyczne wizualizacje
+  - pygbif              # Pythonowy klient GBIF
+  - shapely             # Operacje geometryczne
+  - fiona               # Obsługa formatów plików OGR
+  - jupyterlab          # Interaktywne środowisko pracy
+  - requests            # Pobieranie danych z sieci

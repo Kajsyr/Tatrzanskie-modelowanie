@@ -1,0 +1,21 @@
+name: rtatry
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - r-base=4.3.1
+  - r-tidyverse         # ggplot2, dplyr, readr, etc.
+  - r-sf                # Dane wektorowe
+  - r-terra             # Dane rastrowe (zastępuje 'raster')
+  - r-readxl            # Odczyt plików Excel
+  - r-rgbif             # Interfejs do GBIF
+  - r-coordinatecleaner # Czyszczenie danych z GBIF
+  - r-elevatr           # Pobieranie danych DEM
+  - r-rmapshaper        # Upraszczanie geometrii (ms_simplify)
+  - r-rnaturalearth     # Mapy bazowe świata
+  - r-rnaturalearthdata
+  - r-ggnewscale        # Obsługa wielu skal kolorów w ggplot
+  - r-svglite           # Eksport do formatu SVG
+  - gdal
+  - geos
+  - proj
