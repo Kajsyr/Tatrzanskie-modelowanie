@@ -4,6 +4,8 @@
 /pipeline/output/
 /pipeline/.nextflow*
 /pipeline/input/
+/pipeline/bin/
+/pipeline/cache/
 
 #Śledź tylko pipeline
 !/pipeline/

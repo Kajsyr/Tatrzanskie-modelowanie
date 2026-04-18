@@ -6,7 +6,7 @@ dependencies:
   - r-base=4.3.1
   - r-tidyverse         # ggplot2, dplyr, readr, etc.
   - r-sf                # Dane wektorowe
-  - r-terra             # Dane rastrowe (zastępuje 'raster')
+  - r-terra >= 1.8.5             # Dane rastrowe (zastępuje 'raster')
   - r-readxl            # Odczyt plików Excel
   - r-rgbif             # Interfejs do GBIF
   - r-coordinatecleaner # Czyszczenie danych z GBIF
@@ -16,6 +16,7 @@ dependencies:
   - r-rnaturalearthdata
   - r-ggnewscale        # Obsługa wielu skal kolorów w ggplot
   - r-svglite           # Eksport do formatu SVG
+  - r-optparse        # Parsowanie argumentów w skryptach R
   - gdal
   - geos
   - proj

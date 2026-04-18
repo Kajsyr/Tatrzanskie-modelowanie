@@ -1,12 +1,7 @@
 nextflow.enable.dsl=2
 
-// Parametry wejściowe
-params.species_file = "${projectDir}/input/FLORA_UJ_TPN.xlsx"
-params.alp_shapefile = "${projectDir}/input/Alpy/BiogeoRegions2016_Alpine_ExportFeatures.shp"
 
 process EXTRACT_SPECIES {
-    executor 'local' // To zadanie jest szybkie, nie wymaga klastra
-    
     input:
     path xlsx
 
@@ -25,10 +20,10 @@ process EXTRACT_SPECIES {
 
 
 process GET_GBIF_DATA {
-    conda '${baseDir}/envs/rtatry.yml'
+    conda '${params.project_env}/rtatry.yml'
     // Używamy nazwy gatunku w podfolderach, żeby utrzymać porządek
     storeDir "${params.output_dir}/cache_db/raw_data/${species_name.replaceAll(' ', '_')}"
-    publishDir "${params.output_dir}/raw_data/${species_name.replaceAll(' ', '_')}", mode: 'copy'
+    publishDir "${params.cache_dir}/raw_data/${species_name.replaceAll(' ', '_')}", mode: 'copy'
     
     // Ważne: GBIF ma limity jednoczesnych pobrań (zwykle 3), 
     // ograniczamy liczbę procesów działających w tym samym czasie.
@@ -54,7 +49,7 @@ process GET_GBIF_DATA {
         stop("Nie znaleziono klucza dla: ${species_name}")
     }
 
-    wkt_polygon <- "POLYGON((4 43.5, 18 43.5, 18 48.5, 4 43.5))"
+    wkt_polygon <- "POLYGON((4 43.5, 18 43.5, 18 48.5, 4 48.5, 4 43.5))"
 
     # 2. Wyślij zapytanie dla JEDNEGO klucza
     gbif_download_key <- occ_download(
@@ -82,6 +77,8 @@ process GET_GBIF_DATA {
 
 process PROCESS_DEM {
     publishDir "${params.output_dir}/spatial", mode: 'copy'
+    storeDir "${params.cache_dir}/dem_alps"
+    conda "${params.project_envs}/rtatra.yml"
 
     input:
     path shp_dir // folder zawierający pliki .shp, .shx, .dbf
@@ -107,87 +104,141 @@ process PROCESS_DEM {
     """
 }
 
-process FILTER_AND_PLOT {
+process FILTER {
+    publishDir "${params.output_dir}/filter", mode: 'copy'
+    conda "${params.project_envs}/rtatra.yml"
+
+    input:
+    path raw_csv
+    path shp_rds
+
+    output:
+    path "*.csv"
+
+    script:
+    """
+    filter_gbif.R \
+        --input ${raw_csv} \
+        --output cleaned_${raw_csv.simpleName}.csv \
+        --shape ${shp_rds} 
+    """
+}
+
+process PLOT {
     publishDir "${params.output_dir}/plots", mode: 'copy'
+    conda "${params.project_envs}/rtatra.yml"    
 
     input:
     path raw_csv
     path dem_tif
-    path shp_rds
 
     output:
-    path "map_alps_all.svg"
-    path "species_counts.csv"
+    path "map_*.svg"
 
     script:
+    def spec_name = raw_csv.simpleName.replace('_gbif', '').replace('_', ' ')
     """
-    #!/usr/bin/env Rscript
-    library(dplyr)
-    library(sf)
-    library(terra)
-    library(ggplot2)
-    library(CoordinateCleaner)
-    library(rnaturalearth)
-
-    # 1. Czyszczenie danych GBIF
-    gbif_download <- read.delim("$raw_csv", sep = "\\t", header = TRUE, quote = "")
-    colnames(gbif_download) <- tolower(colnames(gbif_download))
-    
-    # CoordinateCleaner wymaga konkretnych nazw
-    gbif_clean <- gbif_download %>%
-      rename(decimalLongitude = decimallongitude, decimalLatitude = decimallatitude) %>%
-      cc_val() %>% cc_zero() %>% cc_cap() %>% cc_urb() %>% cc_gbif()
-
-    # 2. Przestrzenne filtrowanie do obszaru Alp
-    shp_alps_simply <- readRDS("$shp_rds")
-    df_sf <- st_as_sf(gbif_clean, coords = c("decimalLongitude", "decimalLatitude"), crs = 4326)
-    df_sf <- st_transform(df_sf, st_crs(shp_alps_simply))
-    
-    inside_vector <- st_within(df_sf, shp_alps_simply, sparse = FALSE)
-    gbif_alps <- gbif_clean[apply(inside_vector, 1, any), ]
-
-    # 3. Statystyki
-    counts <- gbif_alps %>% group_by(species) %>% summarise(count = n()) %>% arrange(desc(count))
-    write.csv(counts, "species_counts.csv", row.names = FALSE)
-
-    # 4. Mapowanie
-    dem_alps <- rast("$dem_tif")
-    contours <- terra::as.contour(dem_alps, levels = seq(0, 5000, 200))
-    contours_sf <- st_as_sf(contours)
-    world <- ne_countries(scale = "medium", returnclass = "sf")
-
-    map_alps_all <- ggplot() +
-      geom_sf(data = contours_sf, aes(color = level), size = 0.3) +
-      scale_color_gradientn(colors = c("darkgreen", "yellow", "orange", "brown")) +
-      ggnewscale::new_scale_color() +
-      geom_sf(data = world, alpha=0.2) +
-      geom_point(data = gbif_alps, aes(x = decimalLongitude, y = decimalLatitude, color = species), size = 0.5) +
-      coord_sf(xlim = c(4, 18), ylim = c(43.5, 48.5), expand = FALSE) +
-      theme_minimal()
-
-    ggsave("map_alps_all.svg", plot = map_alps_all, width = 10, height = 8)
+    plot_gbif.R \
+        --input cleaned_${raw_csv.simpleName}.csv \
+        --dem dem_alps.tif \
+        --species "${spec_name}" \
+        --output map_${raw_csv.simpleName}.svg
     """
 }
 
-process DOWNLOAD_BIOCLIM {
-    conda '${baseDir}/envs/rtatry.yml'
-    // Używamy storeDir, aby nie pobierać ciężkich plików rastrowych przy każdym uruchomieniu
-    storeDir "${params.output_dir}/cache_db/worldclim"
+
+process DOWNLOAD_BIOCLIM_ALPS {
+    conda "${params.project_envs}/rtatra.yml"
+    // storeDir sprawi, że wycięte rastry zostaną zachowane na stałe
+    storeDir "${params.cache_dir}/worldclim_alps"
 
     output:
-    path "wc2.1_2.5m/*.tif", emit: bioclim_tifs
+    path "alps_*.tif", emit: bioclim_tifs
 
     script:
     """
     #!/usr/bin/env Rscript
     library(geodata)
-    # Pobiera dane BIO (1-19) dla całego świata w rozdzielczości 2.5 minuty
-    worldclim_global(var = "bio", res = 2.5, path = ".")
+    library(terra)
+
+    # 1. Definicja Twojego obszaru (Bounding Box na podstawie POLYGON)
+    # xmin: 4, xmax: 18, ymin: 43.5, ymax: 48.5
+    roi_ext <- ext(4, 18, 43.5, 48.5)
+
+    # 2. Pobieranie danych globalnych
+    # res = 0.5 (ok. 1km) jest optymalne dla obszarów górskich (Alpy)
+    cat("Pobieranie danych WorldClim (res=0.5)...\\n")
+    bio_global <- worldclim_global(var = "bio", res = 0.5, path = ".")
+
+    # 3. Przycięcie do Twojego obszaru
+    cat("Przycinanie do zadanego poligonu...\\n")
+    bio_alps <- crop(bio_global, roi_ext)
+
+    # 4. Zapisywanie warstw jako osobne pliki TIFF
+    # Pętla przejdzie przez wszystkie 19 zmiennych bioclimatycznych
+    for(i in 1:nlyr(bio_alps)) {
+        var_name <- names(bio_alps)[i]
+        writeRaster(bio_alps[[i]], 
+                    filename = paste0("alps_", var_name, ".tif"), 
+                    overwrite = TRUE)
+    }
+    cat("Zakończono. Pliki zapisane w cache.\\n")
     """
 }
 
+process DOWNLOAD_CHELSA_ALPS {
+    conda "${params.project_envs}/rtatra.yml"
+    storeDir "${params.cache_dir}/chelsa_alps"
+
+    output:
+    path "alps_chelsa_*.tif", emit: chelsa_tifs
+
+    script:
+    """
+    #!/usr/bin/env Rscript
+    library(geodata)
+    library(terra)
+
+    # 1. Definicja obszaru (Bounding Box dla Alp)
+    roi_ext <- ext(4, 18, 43.5, 48.5)
+
+    # 2. Pobieranie danych CHELSA
+    # var = "bio" pobierze 19 zmiennych bioclimatycznych
+    # Uwaga: CHELSA v2.1 jest bardzo dokładna, ale pliki są duże.
+    cat("Pobieranie danych CHELSA (bioclim)...\\n")
+    
+    # Pobieramy zmienne bioclimatyczne (bio)
+    # geodata pobierze je do folderu tymczasowego, a my je przytniemy
+    bio_global <- chelsa(var = "bio", res = 0.5, path = ".", download = TRUE)
+
+    # 3. Przycięcie do Twojego obszaru
+    cat("Przycinanie do zadanego poligonu...\\n")
+    bio_alps <- crop(bio_global, roi_ext)
+
+    # 4. Opcjonalnie: Pobranie insolacji (Solar Radiation)
+    # Jeśli chcesz dodać nasłonecznienie, odkomentuj poniższe linie:
+    # cat("Pobieranie insolacji...\\n")
+    # sol_global <- chelsa(var = "sol", res = 0.5, path = ".", download = TRUE)
+    # sol_alps <- crop(mean(sol_global), roi_ext) # średnia roczna insolacja
+    # names(sol_alps) <- "solar_rad"
+    # bio_alps <- c(bio_alps, sol_alps)
+
+    # 5. Zapisywanie warstw
+    for(i in 1:nlyr(bio_alps)) {
+        var_name <- names(bio_alps)[i]
+        writeRaster(bio_alps[[i]], 
+                    filename = paste0("alps_chelsa_", var_name, ".tif"), 
+                    overwrite = TRUE)
+    }
+    cat("Zakończono. Pliki zapisane w cache.\\n")
+    """
+}
+
+
+
+
 process EXTRACT_ENVIRONMENTAL_DATA {
-    conda '${baseDir}/envs/rtatry.yml'
+    conda "${params.project_envs}/rtatra.yml"
     publishDir "${params.output_dir}/final_data", mode: 'copy'
     
     input:
@@ -244,7 +295,7 @@ process EXTRACT_ENVIRONMENTAL_DATA {
 }
 
 process SOLAR_ANALYSIS_SAGA {
-    conda '${baseDir}/envs/rtatry.yml'
+    conda "${params.project_envs}/rtatra.yml"
     publishDir "${params.output_dir}/solar", mode: 'copy'
 
     input:
@@ -307,11 +358,11 @@ process SOLAR_ANALYSIS_SAGA {
 }
 
 process GENERATE_PSEUDOABSENCE {
-    conda '${baseDir}/envs/rtatry.yml'
+    conda "${params.project_envs}/rtatra.yml"
     publishDir "${params.output_dir}/presence_absence", mode: 'copy'
 
     input:
-    path "gbif_all.csv"
+    path gbif_csv
     path dem_tif
 
     output:
@@ -324,7 +375,7 @@ process GENERATE_PSEUDOABSENCE {
     library(dplyr)
 
     # 1. Wczytanie danych i rastra (jako maski)
-    presences <- read.csv("gbif_all.csv")
+    presences <- read.csv("$gbif_csv", sep = "\\t", header = TRUE, quote = "")
     dem <- rast("$dem_tif")
 
     # 2. Tworzenie punktów tła (Background points)
@@ -419,22 +470,32 @@ workflow DATASET {
     // 2. Pobieranie GBIF (równolegle dla każdego gatunku)
     gbif_ch = GET_GBIF_DATA(ch_species)
 
+    
     // 3. Przygotowanie zasobów (DEM i BIOCLIM)
     dem_ch = PROCESS_DEM(file(params.alp_shapefile).parent)
-    // 1. Zbieramy wszystkie obecności
-    all_presences = gbif_ch.raw_csv.collect()
+
+    // Filtrowanie i mapowanie wystąpień
+    filtered_gbif_ch= FILTER(gbif_ch.raw_csv, dem_ch.shp_rds)
+
+    //Mapowanie
+    PLOT(filtered_gbif_ch, dem_ch.dem_tif)
+
+    //odfultujemy puste pliki bo cześć odpada wcześniej
+    valid_gbif_ch = filtered_gbif_ch.filter { file -> 
+        file.readLines().size() > 1 
+    }
 
     // 2. Generujemy pseudo-absence
-    pa_ch = GENERATE_PSEUDOABSENCE(all_presences, dem_ch.dem_tif)
+    //pa_ch = GENERATE_PSEUDOABSENCE(valid_gbif_ch, dem_ch.dem_tif)
 
     // 3. Przekazujemy połączone punkty (P+A) do ekstrakcji środowiskowej
-    bioclim_ch = DOWNLOAD_BIOCLIM()
+    bioclim_ch = DOWNLOAD_BIOCLIM_ALPS()
     env_data = EXTRACT_ENVIRONMENTAL_DATA(
-        pa_ch.pa_data,
+        valid_gbif_ch,
         bioclim_ch.bioclim_tifs.collect(),
         dem_ch.dem_tif
     )
 
     // 4. SAGA na samym końcu
-    SOLAR_ANALYSIS_SAGA(env_data.final_data, dem_ch.dem_tif)
+    //SOLAR_ANALYSIS_SAGA(env_data.final_data, dem_ch.dem_tif)
 }
