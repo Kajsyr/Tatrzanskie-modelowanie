@@ -1,5 +1,0 @@
-# Tatrzanskie-modelowanie
-
-```{r}
-
-```

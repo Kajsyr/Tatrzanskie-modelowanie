@@ -1,10 +1,9 @@
 # 1. Ignore everything in the root
 /*
+/pipeline/..
 /pipeline/work/
 /pipeline/output/
 /pipeline/.nextflow*
-/pipeline/input/
-/pipeline/bin/
 /pipeline/cache/
 
 #Śledź tylko pipeline
