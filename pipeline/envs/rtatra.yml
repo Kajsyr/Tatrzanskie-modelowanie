@@ -17,6 +17,7 @@ dependencies:
   - r-ggnewscale        # Obsługa wielu skal kolorów w ggplot
   - r-svglite           # Eksport do formatu SVG
   - r-optparse        # Parsowanie argumentów w skryptach R
+  - r-geodata
   - gdal
   - geos
   - proj

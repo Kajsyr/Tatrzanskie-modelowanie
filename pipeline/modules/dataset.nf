@@ -26,7 +26,7 @@ process PROCESS_DEM {
     path shp_dir // folder zawierający pliki .shp, .shx, .dbf
 
     output:
-    path "dem_alps.tif", emit: dem_tif
+    path "dem_alps.tif", emit: dem_tiff
     path "shp_alps_simply.rds", emit: shp_rds
     path "contours_alps.rds", emit: contours_rds
 
@@ -68,9 +68,9 @@ process GET_GBIF_DATA {
     storeDir "${params.cache_dir}/raw_data/" 
     conda "${params.project_envs}/rtatra.yml"
 
-    // Ważne: GBIF ma limity jednoczesnych pobrań (zwykle 3), 
-    // ograniczamy liczbę procesów działających w tym samym czasie.
+    //GBIF ma limity jednoczesnych pobrań około 3 
     maxForks 3 
+    tag "${species_name}"
 
     input:
     val species_name
@@ -114,29 +114,33 @@ process GET_GBIF_DATA {
     
     # Zapisz wynik
     filename <- paste0(gsub(" ", "_", "${species_name}"), "_gbif.csv")
-    write.table(df, filename, sep = "\\t", row.names = FALSE)
+    write.table(df, filename, sep = ",", row.names = FALSE)
     """
 }
 
 
 
 process FILTER {
-    publishDir "${params.output_dir}/filter", mode: 'copy'
-    storeDir "${params.cache_dir}/filter"
+    publishDir "${params.output_dir}", mode: 'copy'
+    storeDir "${params.cache_dir}"
     conda "${params.project_envs}/rtatra.yml"
-
+    tag "${raw_csv}"
+    cpus '6'
+    
     input:
     path raw_csv
     path shp_rds
 
     output:
-    path "*_filtered.csv"
+    path "filtered/*.csv", emit: cleaned_data
+    path "filtered/*.log",  emit: logs
 
     script:
     """
+    mkdir filtered/
     filter_gbif.R \
         --input ${raw_csv} \
-        --output ${raw_csv.simpleName}_filtered.csv \
+        --output filtered/${raw_csv.simpleName} \
         --shape ${shp_rds} 
     """
 }
@@ -144,6 +148,7 @@ process FILTER {
 process PLOT {
     publishDir "${params.output_dir}/plots", mode: 'copy'
     conda "${params.project_envs}/rtatra.yml"    
+    tag "${raw_csv}"
 
     input:
     path raw_csv
@@ -164,7 +169,8 @@ process PLOT {
 }
 
 
-workflow DATASET {
+workflow DATASET{
+    main:
     // wczytanie listy gatunków z eksel
     ch_species = EXTRACT_SPECIES(params.species_file)
         .species_list.splitText().map { it.trim() }
@@ -184,13 +190,17 @@ workflow DATASET {
     filtered_gbif_ch= FILTER(gbif_ch, dem_ch.shp_rds)
 
     //odfultujemy puste pliki bo cześć odpada wcześniej
-    valid_gbif_ch = filtered_gbif_ch
+    valid_gbif_ch = filtered_gbif_ch.cleaned_data
             .flatten()
             .filter { file -> file.countLines() > 1} 
             .unique()
 
     //Mapowanie
     PLOT(valid_gbif_ch, dem_ch.contours_rds)
+
+    emit:
+        species_ch = valid_gbif_ch
+        dem_ch = dem_ch.dem_tiff
 
 }
 
