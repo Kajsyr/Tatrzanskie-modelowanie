@@ -66,14 +66,15 @@ process DOWNLOAD_BIOCLIM_ALPS {
     # xmin: 4, xmax: 18, ymin: 43.5, ymax: 48.5
     roi_ext <- ext(4, 18, 43.5, 48.5)
 
-    # 2. Pobieranie danych globalnych
+    # 2. Pobieranie tylko kafla zawierającego Alpy (30x30 stopni)
     # res = 0.5 (ok. 1km) jest optymalne dla obszarów górskich (Alpy)
-    cat("Pobieranie danych WorldClim (res=0.5)...\\n")
-    bio_global <- worldclim_global(var = "bio", res = 0.5, path = ".")
+    # Spróbujmy tylko z wokół jednego punktu
+    cat("Pobieranie kafla WorldClim (res=0.5)...\\n")
+    bio_tile <- worldclim_tile(var = "bio", res = 0.5, lon = 11, lat = 46, path = ".")
 
     # 3. Przycięcie do Twojego obszaru
     cat("Przycinanie do zadanego poligonu...\\n")
-    bio_alps <- crop(bio_global, roi_ext)
+    bio_alps <- crop(bio_tile, roi_ext)
 
     #Tworzenie folderu
     if (!dir.exists("bioclim")) dir.create("bioclim")
