@@ -1,6 +1,6 @@
 # 1. Ignore everything in the root
 work/
-output/
+output/plots/
 .nextflow*
 /cache/
 login.config

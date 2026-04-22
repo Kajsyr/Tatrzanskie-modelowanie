@@ -15,3 +15,4 @@ dependencies:
   - fiona               # Obsługa formatów plików OGR
   - jupyterlab          # Interaktywne środowisko pracy
   - requests            # Pobieranie danych z sieci
+  - earthengine-api #API do google earth engine

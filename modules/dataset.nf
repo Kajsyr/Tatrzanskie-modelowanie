@@ -6,16 +6,74 @@ process EXTRACT_SPECIES {
     path xlsx
 
     output:
-    stdout emit: species_list
+    path "species.txt"
 
     script:
     """
     #!/usr/bin/env Rscript
     library(readxl)
     df <- read_excel("$xlsx", sheet = "species")
-    cat(df\$Species, sep="\\n")
+    writeLines(df\$Species, "species.txt")
     """
 }
+
+
+process GET_GBIF_DATA {
+    publishDir "${params.output_dir}/raw_data/"
+    storeDir "${params.cache_dir}/raw_data/" 
+    conda "${params.project_envs}/rtatra.yml"
+
+    //GBIF ma limity jednoczesnych pobrań około 3 
+    maxForks 3
+    tag "${species_name}"
+    errorStrategy 'retry'
+    maxRetries 3
+    input:
+    val species_name
+
+    output:
+    // Tworzymy plik o nazwie specyficznej dla gatunku
+    path "${species_name.replaceAll(' ', '_')}_gbif.csv", emit: raw_csv
+
+    script:
+    """
+    #!/usr/bin/env Rscript
+    library(rgbif)
+    library(dplyr)
+
+    # 1. Pobierz klucz dla konkretnego gatunku
+    key <- name_backbone(name = "${species_name}")\$usageKey
+    
+    if (is.null(key)) {
+        stop("Nie znaleziono klucza dla: ${species_name}")
+    }
+
+    wkt_polygon <- "POLYGON((4 43.5, 18 43.5, 18 48.5, 4 48.5, 4 43.5))"
+
+    # 2. Wyślij zapytanie dla JEDNEGO klucza
+    gbif_download_key <- occ_download(
+      pred("taxonKey", key),
+      pred_gte("year", 1990),
+      pred_lt("coordinateUncertaintyInMeters", 20),
+      pred("hasCoordinate", TRUE),
+      pred_within(wkt_polygon),
+      pred("hasGeospatialIssue", FALSE),
+      format = "SIMPLE_CSV",
+      user = "${params.gbif_user}",
+      pwd  = "${params.gbif_pwd}",
+      email = "${params.gbif_email}"
+    )
+
+    occ_download_wait(gbif_download_key)
+    dwn <- occ_download_get(gbif_download_key)
+    df <- occ_download_import(dwn)
+    
+    # Zapisz wynik
+    filename <- paste0(gsub(" ", "_", "${species_name}"), "_gbif.csv")
+    write.table(df, filename, sep = ",", row.names = FALSE)
+    """
+}
+
 
 process PROCESS_DEM {
     publishDir "${params.output_dir}/spatial", mode: 'copy'
@@ -63,60 +121,7 @@ process PROCESS_DEM {
 }
 
 
-process GET_GBIF_DATA {
-    publishDir "${params.output_dir}/raw_data/"
-    storeDir "${params.cache_dir}/raw_data/" 
-    conda "${params.project_envs}/rtatra.yml"
 
-    //GBIF ma limity jednoczesnych pobrań około 3 
-    maxForks 1 
-    tag "${species_name}"
-
-    input:
-    val species_name
-
-    output:
-    // Tworzymy plik o nazwie specyficznej dla gatunku
-    path "${species_name.replaceAll(' ', '_')}_gbif.csv", emit: raw_csv
-
-    script:
-    """
-    #!/usr/bin/env Rscript
-    library(rgbif)
-    library(dplyr)
-
-    # 1. Pobierz klucz dla konkretnego gatunku
-    key <- name_backbone(name = "${species_name}")\$usageKey
-    
-    if (is.null(key)) {
-        stop("Nie znaleziono klucza dla: ${species_name}")
-    }
-
-    wkt_polygon <- "POLYGON((4 43.5, 18 43.5, 18 48.5, 4 48.5, 4 43.5))"
-
-    # 2. Wyślij zapytanie dla JEDNEGO klucza
-    gbif_download_key <- occ_download(
-      pred("taxonKey", key),
-      pred_gte("year", 1990),
-      pred_lt("coordinateUncertaintyInMeters", 20),
-      pred("hasCoordinate", TRUE),
-      pred_within(wkt_polygon),
-      pred("hasGeospatialIssue", FALSE),
-      format = "SIMPLE_CSV",
-      user = "${params.gbif_user}",
-      pwd  = "${params.gbif_pwd}",
-      email = "${params.gbif_email}"
-    )
-
-    occ_download_wait(gbif_download_key)
-    dwn <- occ_download_get(gbif_download_key)
-    df <- occ_download_import(dwn)
-    
-    # Zapisz wynik
-    filename <- paste0(gsub(" ", "_", "${species_name}"), "_gbif.csv")
-    write.table(df, filename, sep = ",", row.names = FALSE)
-    """
-}
 
 
 
@@ -173,17 +178,18 @@ workflow DATASET{
     main:
     // wczytanie listy gatunków z eksel
     ch_species = EXTRACT_SPECIES(params.species_file)
-        .species_list.splitText().map { it.trim() }
+        .splitText()
+        .map { it.trim() }
 
-    // 2. Pobieranie GBIF (równolegle dla każdego gatunku)
-    download_gbif_ch = GET_GBIF_DATA(ch_species)
+    //Pobieranie GBIF (równolegle dla każdego gatunku)
+    download_gbif_ch = GET_GBIF_DATA(ch_species)    
 
     //odfultujemy puste pliki bo cześć odpada wcześniej
     gbif_ch = download_gbif_ch.filter{ file -> 
         file.readLines().size() > 1 
     }
     
-    // 3. Przygotowanie danych przestrzennych (DEM i uproszczony kształt Alp)
+    //DEM i uproszczony kształt Alp
     dem_ch = PROCESS_DEM(file(params.alp_shapefile).parent)
 
     // Filtrowanie i mapowanie wystąpień

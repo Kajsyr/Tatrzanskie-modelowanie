@@ -39,6 +39,29 @@ process DOWNLOAD_BIOCLIM_ALPS {
     library(geodata)
     library(terra)
 
+    bioclim_names <- c(
+        bio1="Annual Mean Temperature (°C)",
+        bio2="Mean Diurnal Range",
+        bio3="Isothermality",
+        bio4="Temperature Seasonality",
+        bio5="Max Temp Warmest Month",
+        bio6="Min Temp Coldest Month",
+        bio7="Temp Annual Range",
+        bio8="Mean Temp Wettest Quarter",
+        bio9="Mean Temp Driest Quarter",
+        bio10="Mean Temp Warmest Quarter",
+        bio11="Mean Temp Coldest Quarter",
+        bio12="Annual Precipitation (mm)",
+        bio13="Precipitation Wettest Month",
+        bio14="Precipitation Driest Month",
+        bio15="Precipitation Seasonality",
+        bio16="Precipitation Wettest Quarter",
+        bio17="Precipitation Driest Quarter",
+        bio18="Precipitation Warmest Quarter",
+        bio19="Precipitation Coldest Quarter"
+    )
+
+
     # 1. Definicja Twojego obszaru (Bounding Box na podstawie POLYGON)
     # xmin: 4, xmax: 18, ymin: 43.5, ymax: 48.5
     roi_ext <- ext(4, 18, 43.5, 48.5)
@@ -52,6 +75,9 @@ process DOWNLOAD_BIOCLIM_ALPS {
     cat("Przycinanie do zadanego poligonu...\\n")
     bio_alps <- crop(bio_global, roi_ext)
 
+    #Tworzenie folderu
+    if (!dir.exists("bioclim")) dir.create("bioclim")
+
     # 4. Zapisywanie warstw jako osobne pliki TIFF
     # Pętla przejdzie przez wszystkie 19 zmiennych bioclimatycznych
     for(i in 1:nlyr(bio_alps)) {
@@ -63,6 +89,124 @@ process DOWNLOAD_BIOCLIM_ALPS {
     cat("Zakończono. Pliki zapisane w cache.\\n")
     """
 }
+
+process PLOT_BIOCLIM {
+
+    publishDir "${params.output_dir}/plots/", mode: 'copy'
+    conda "${params.project_envs}/rtatra.yml"
+
+    input:
+    path bioclim_dir
+
+    output:
+    path "alps*.png"
+
+    script:
+    """
+    #!/usr/bin/env Rscript
+    library(terra)
+    library(ggplot2)
+
+
+    bioclim_names <- c(
+        bio1="Annual Mean Temperature (°C)",
+        bio2="Mean Diurnal Range",
+        bio3="Isothermality",
+        bio4="Temperature Seasonality",
+        bio5="Max Temp Warmest Month",
+        bio6="Min Temp Coldest Month",
+        bio7="Temp Annual Range",
+        bio8="Mean Temp Wettest Quarter",
+        bio9="Mean Temp Driest Quarter",
+        bio10="Mean Temp Warmest Quarter",
+        bio11="Mean Temp Coldest Quarter",
+        bio12="Annual Precipitation (mm)",
+        bio13="Precipitation Wettest Month",
+        bio14="Precipitation Driest Month",
+        bio15="Precipitation Seasonality",
+        bio16="Precipitation Wettest Quarter",
+        bio17="Precipitation Driest Quarter",
+        bio18="Precipitation Warmest Quarter",
+        bio19="Precipitation Coldest Quarter"
+    )
+
+    # Wczytaj warstwy
+    files <- list.files("${bioclim_dir}", pattern="tif\$", full.names=TRUE)
+
+    #iterowanie po warstwach i zapisywanie do pliku
+    for(f in files){
+        r <- rast(f)
+        name <- tools::file_path_sans_ext(basename(f))
+
+        #szukamy prawdziwej nazwy
+        var_match <- regmatches(name, regexpr("bio_?\\\\d+", name))
+        var <- gsub("_", "", var_match)
+        label <- bioclim_names[[var]]
+
+        df <- as.data.frame(r, xy=TRUE, na.rm=TRUE)
+        colnames(df)[3] <- "value"
+
+        p <- ggplot(df, aes(x=x, y=y, fill=value)) +
+            geom_raster() +
+            coord_equal() +
+            scale_fill_viridis_c() +
+            labs(title=name) +
+            theme_minimal()
+
+        ggsave(paste0(name, ".png"), plot=p, width=8, height=6)
+    }
+
+    """
+}
+
+process GEE_DOWNSCALING_ALPS {
+    conda "conda-forge::geemap conda-forge::earthengine-api"
+    storeDir "${params.cache_dir}/gee_highres"
+
+    output:
+    path "niche_30m/*.tif", emit: highres_tiffs
+
+    script:
+    """
+    #!/usr/bin/env python3
+    import ee
+    import geemap
+    import os
+
+    # Inicjalizacja (wymaga skonfigurowanego serwisu lub tokena w środowisku)
+    ee.Initialize()
+
+    roi = ee.Geometry.Rectangle([4.0, 43.5, 18.0, 48.5]) # Rozszerzony zasięg Alp
+    
+    # 1. Dane źródłowe
+    bioclim = ee.Image("WORLDCLIM/V1/BIO").select('bio01').divide(10)
+    dem_high = ee.Image("NASA/NASADEM_HGT/001").select('elevation')
+    
+    # 2. Downscaling (Lapse Rate Method)
+    dem_low = dem_high.resample('bilinear').reproject(crs=bioclim.crs(), scale=1000)
+    lapse_rate = -0.0065
+    bioclim_30m = bioclim.add(dem_high.subtract(dem_low).multiply(lapse_rate)).rename('temp_30m')
+
+    # 3. Topografia
+    slope = ee.Terrain.slope(dem_high).rename('slope')
+    aspect = ee.Terrain.aspect(dem_high).rename('aspect')
+    
+    stack = ee.Image.cat([bioclim_30m, dem_high, slope, aspect]).clip(roi)
+
+    # 4. Eksport lokalny (przez geemap - dla małych/średnich obszarów)
+    # Dla bardzo dużych obszarów lepiej użyć Export.image.toDrive i pobierać przez API
+    if not os.path.exists('niche_30m'): os.makedirs('niche_30m')
+    
+    geemap.ee_export_image(
+        stack, 
+        filename="niche_30m/alps_highres_stack.tif", 
+        scale=30, 
+        region=roi, 
+        file_per_band=True
+    )
+    """
+}
+
 
 process DOWNLOAD_CHELSA_ALPS {
     conda "${params.project_envs}/rtatra.yml"
@@ -116,11 +260,13 @@ process DOWNLOAD_CHELSA_ALPS {
 process EXTRACT_ENVIRONMENTAL_DATA {
     conda "${params.project_envs}/rtatra.yml"
     publishDir "${params.output_dir}/features/", mode: 'copy'
+    storeDir "${params.cache_dir}/features"
     
     input:
     path gbif_species
     path dem_tiff
-    path bioclim
+    path bioclim_dir
+    //path gge_dir
      //path chelsa
     
 
@@ -134,8 +280,7 @@ process EXTRACT_ENVIRONMENTAL_DATA {
       --input ${gbif_species} \
      --output results/${gbif_species.simpleName}.csv \
      --dem ${dem_tiff} \
-     --bioclim ${bioclim}/
-
+     --bioclim ${bioclim_dir}/
     """
 }
 
@@ -315,14 +460,22 @@ workflow FEATURES_EXTRACTION {
         dem_tiff
     main:
 
-    // 3. Przekazujemy połączone punkty (P+A) do ekstrakcji środowiskowej
+    //Dowload BIOCLIM
     bioclim_ch = DOWNLOAD_BIOCLIM_ALPS()
     //chelsa_ch = DOWNLOAD_CHELSA_ALPS()
 
+    //PLOT
+    PLOT_BIOCLIM(bioclim_ch)
+
+    //dowload data using GEE
+    //gee_ch = GEE_DOWNSCALING_ALPS()
+
+    //extract envirmnetal data
     env_data = EXTRACT_ENVIRONMENTAL_DATA(
         dataset_ch,
         dem_tiff,
         bioclim_ch
+        //gee_ch
         //chelsa_ch.collect(),
         
     )

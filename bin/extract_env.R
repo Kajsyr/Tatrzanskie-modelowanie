@@ -32,7 +32,10 @@ option_list <- list(
   make_option(c("--dem"), type="character", default=NULL, 
               help="Ścieżka do pliku DEM ", metavar="character"),
   make_option(c("--bioclim"), type="character", default=NULL, 
-              help="Ścieżka do worldcim ", metavar="character")
+              help="Ścieżka do worldcim ", metavar="character"),
+  make_option(c("--gee"), type="character", default=NULL, 
+              help="Ścieżka do plików/katalogu z GEE")
+  
 )
 
 opt_parser <- OptionParser(option_list=option_list)
@@ -72,6 +75,24 @@ for (v in terrain_vars) {
 #Ekstrakcja BIOCLIM
 bio_ext <- terra::extract(bioclim_stack, points_lonlat)
 bio_values <- bio_ext[, -1]   # usuwamy ID
+
+
+
+# Ekstrakcaj GEE
+if (!is.null(opt$gee)) {
+  # Wczytujemy pliki z katalogu GEE (np. wygenerowane przez geemap)
+  gee_files <- list.files(opt$gee, pattern="\\.tif$", full.names = TRUE)
+  if (length(gee_files) > 0) {
+    gee_stack <- rast(gee_files)
+    # Upewniamy się, że CRS punktów zgadza się z warstwami GEE
+    points_gee <- project(points_lonlat, crs(gee_stack))
+    gee_ext <- terra::extract(gee_stack, points_gee)
+    # Dodajemy przedrostek 'gee_', aby odróżnić je od standardowych warstw
+    gee_values <- gee_ext[, -1]
+    colnames(gee_values) <- paste0("gee_", colnames(gee_values))
+    gbif_alps <- cbind(gbif_alps, gee_values)
+  }
+}
 
 
 #Łączenie wszystkich  i finalny zapis
