@@ -3,6 +3,8 @@ import pandas as pd
 
 dfs_path = "../output/features/results/*.csv"
 
+print(dfs_path)
+
 df = pd.concat([pd.read_csv(f) for f in glob.glob(dfs_path)], ignore_index=True)
 
 df_selected = pd.concat([

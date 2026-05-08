@@ -35,6 +35,8 @@ option_list <- list(
               help="Ścieżka do worldcim ", metavar="character"),
   make_option(c("--gee"), type="character", default=NULL, 
               help="Ścieżka do plików/katalogu z GEE")
+    make_option(c("--IGME5000"), type="character", default=NULL, 
+              help="plik IGME5000")
   
 )
 

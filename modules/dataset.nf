@@ -173,6 +173,23 @@ process PLOT {
     """
 }
 
+process MERGE_CSV {
+    publishDir "${params.output_dir}/final_data", mode: 'copy'
+    conda "${params.project_envs}/rtatra.yml"
+
+    input:
+    path all_csvs 
+
+    output:
+    path "merged_all_species.csv", emit: final_csv
+
+    script:
+    """
+    # Łączenie plików: weź nagłówek z pierwszego, a z reszty tylko dane (od 2. linii)
+    awk 'FNR==1 && NR!=1{next;}{print}' *.csv > merged_all_species.csv
+    """
+}
+
 
 workflow DATASET{
     main:
@@ -204,9 +221,15 @@ workflow DATASET{
     //Mapowanie
     PLOT(valid_gbif_ch, dem_ch.contours_rds)
 
+    //scalanie wszytkich plików csv gatunków w jeden
+    final_dataset_ch = MERGE_CSV(valid_gbif_ch.collect())
+
+
     emit:
         species_ch = valid_gbif_ch
         dem_ch = dem_ch.dem_tiff
+        full_table = final_dataset_ch
+
 
 }
 

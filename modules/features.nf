@@ -1,5 +1,6 @@
 // Proces łączący CSV
 process MERGE_CSV {
+    conda "${params.project_envs}/pytatra.yml"
     publishDir "${params.output_dir}/features/", mode: 'copy'
     storeDir "${params.cache_dir}/features/", mode: 'copy'
 
@@ -7,22 +8,33 @@ process MERGE_CSV {
         path csv_files
 
     output:
-        path "all_species.csv"
+        path "merged_results.csv"
 
     script:
     """
-    #!/usr/bin/env Rscript
-    library(data.table)
+    #!/usr/bin/env python
+    import pandas as pd
+    import os
 
-    # Pobieramy listę plików
-    files <- list.files(pattern = "${csv_files}")
+    # csv_files w bashu to lista oddzielona spacjami. 
+    # Python odbierze to jako string, więc robimy z tego listę:
+    files = "${csv_files}".split()
 
-    # Szybkie wczytywanie i łączenie
-    data_list <- lapply(files, fread)
-    merged_data <- rbindlist(data_list, use.names = TRUE, fill = TRUE)
+    dfs = []
+    for f in files:
+        df = pd.read_csv(f)
+        # Wybieramy kolumny (używając Twojej logiki iloc)
+        selected = pd.concat([
+            df.iloc[:, [0]],
+            df.iloc[:, [9]],
+            df.iloc[:, 21:24],
+            df.iloc[:, [25]],
+            df.iloc[:, 50:]
+        ], axis=1)
+        dfs.append(selected)
 
-    # Zapis do pliku
-    fwrite(merged_data, "all_species.csv")
+    final_df = pd.concat(dfs, ignore_index=True)
+    final_df.to_csv("merged_results.csv", index=False)
     """
 }
 
@@ -481,9 +493,9 @@ workflow FEATURES_EXTRACTION {
         
     )
 
-    //merge_env_data=MERGE_CSV(env_data)
+    merge_env_data=MERGE_CSV(env_data.unique().collect())
     emit:
         env_data
-        //merge_env_data
+        merge_env_data
         
 }
