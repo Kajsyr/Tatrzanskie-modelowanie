@@ -172,53 +172,6 @@ process PLOT_BIOCLIM {
     """
 }
 
-process GEE_DOWNSCALING_ALPS {
-    conda "conda-forge::geemap conda-forge::earthengine-api"
-    storeDir "${params.cache_dir}/gee_highres"
-
-    output:
-    path "niche_30m/*.tif", emit: highres_tiffs
-
-    script:
-    """
-    #!/usr/bin/env python3
-    import ee
-    import geemap
-    import os
-
-    # Inicjalizacja (wymaga skonfigurowanego serwisu lub tokena w środowisku)
-    ee.Initialize()
-
-    roi = ee.Geometry.Rectangle([4.0, 43.5, 18.0, 48.5]) # Rozszerzony zasięg Alp
-    
-    # 1. Dane źródłowe
-    bioclim = ee.Image("WORLDCLIM/V1/BIO").select('bio01').divide(10)
-    dem_high = ee.Image("NASA/NASADEM_HGT/001").select('elevation')
-    
-    # 2. Downscaling (Lapse Rate Method)
-    dem_low = dem_high.resample('bilinear').reproject(crs=bioclim.crs(), scale=1000)
-    lapse_rate = -0.0065
-    bioclim_30m = bioclim.add(dem_high.subtract(dem_low).multiply(lapse_rate)).rename('temp_30m')
-
-    # 3. Topografia
-    slope = ee.Terrain.slope(dem_high).rename('slope')
-    aspect = ee.Terrain.aspect(dem_high).rename('aspect')
-    
-    stack = ee.Image.cat([bioclim_30m, dem_high, slope, aspect]).clip(roi)
-
-    # 4. Eksport lokalny (przez geemap - dla małych/średnich obszarów)
-    # Dla bardzo dużych obszarów lepiej użyć Export.image.toDrive i pobierać przez API
-    if not os.path.exists('niche_30m'): os.makedirs('niche_30m')
-    
-    geemap.ee_export_image(
-        stack, 
-        filename="niche_30m/alps_highres_stack.tif", 
-        scale=30, 
-        region=roi, 
-        file_per_band=True
-    )
-    """
-}
 
 
 process DOWNLOAD_CHELSA_ALPS {
@@ -268,8 +221,6 @@ process DOWNLOAD_CHELSA_ALPS {
 }
 
 
-
-
 process EXTRACT_ENVIRONMENTAL_DATA {
     conda "${params.project_envs}/rtatra.yml"
     publishDir "${params.output_dir}/features/", mode: 'copy'
@@ -297,180 +248,12 @@ process EXTRACT_ENVIRONMENTAL_DATA {
     """
 }
 
-process SOLAR_ANALYSIS_SAGA {
-    conda "${params.project_envs}/rtatra.yml"
-    publishDir "${params.output_dir}/solar", mode: 'copy'
-
-    input:
-    path "gbif_all.csv"   // Połączone dane z poprzednich kroków
-    path dem_tif
-
-    output:
-    path "gbif_with_solar.csv", emit: solar_data
-
-    script:
-    """
-    #!/usr/bin/env Rscript
-    library(terra)
-    library(RSAGA)
-    library(dplyr)
-
-    # 1. Przygotowanie danych
-    gbif <- read.csv("gbif_all.csv")
-    dem  <- rast("$dem_tif")
-    
-    # SAGA wymaga formatu .sdat (Gdal raster) lub .sgrd
-    # Zapisujemy DEM w formacie SAGA
-    writeRaster(dem, "dem_input.sdat", overwrite=TRUE)
-
-    # 2. Konfiguracja środowiska SAGA
-    # RSAGA spróbuje automatycznie znaleźć binarki zainstalowane przez Conda
-    env <- rsaga.env()
-
-    # Definiujemy środek obszaru dla obliczeń (lub wyciągamy z danych)
-    lat_center <- mean(gbif\$decimallatitude, na.rm=TRUE)
-    lon_center <- mean(gbif\$decimallongitude, na.rm=TRUE)
-
-    # 3. Uruchomienie modułu SAGA: Potential Incoming Solar Radiation
-    # Uwaga: To może chwilę potrwać zależnie od rozdzielczości DEM
-    rsaga.pisr2(
-        in.dem      = "dem_input.sgrd",
-        in.latitude  = lat_center,
-        in.longitude = lon_center,
-        out.direct   = "solar_direct.sgrd",
-        out.diffuse  = "solar_diffuse.sgrd",
-        env          = env
-    )
-
-    # 4. Odczyt wyników i ekstrakcja do punktów
-    direct_rast  <- rast("solar_direct.sdat")
-    diffuse_rast <- rast("solar_diffuse.sdat")
-    total_solar  <- direct_rast + diffuse_rast
-
-    points <- vect(gbif, geom = c("decimallongitude", "decimallatitude"), crs = "EPSG:4326")
-    # Upewnij się, że CRS punktów zgadza się z rastrem SAGA
-    points_proj <- project(points, crs(total_solar))
-
-    solar_values <- terra::extract(total_solar, points_proj)
-    
-    # 5. Dodanie wyników do tabeli
-    gbif\$solar_radiation <- solar_values[,2]
-
-    write.csv(gbif, "gbif_with_solar.csv", row.names = FALSE)
-    """
-}
-
-process GENERATE_PSEUDOABSENCE {
-    conda "${params.project_envs}/rtatra.yml"
-    publishDir "${params.output_dir}/presence_absence", mode: 'copy'
-
-    input:
-    path gbif_csv
-    path dem_tif
-
-    output:
-    path "gbif_pa_combined.csv", emit: pa_data
-
-    script:
-    """
-    #!/usr/bin/env Rscript
-    library(terra)
-    library(dplyr)
-
-    # 1. Wczytanie danych i rastra (jako maski)
-    presences <- read.csv("$gbif_csv", sep = "\\t", header = TRUE, quote = "")
-    dem <- rast("$dem_tif")
-
-    # 2. Tworzenie punktów tła (Background points)
-    # Zazwyczaj generuje się ich tyle samo co obecności (1:1) 
-    # lub stałą liczbę (np. 10 000)
-    n_absences <- nrow(presences)
-    
-    set.seed(123) # Dla powtarzalności
-    bg_points <- spatSample(dem, 
-                            size = n_absences, 
-                            method = "random", 
-                            na.rm = TRUE, 
-                            as.points = TRUE)
-
-    # 3. Przygotowanie tabeli tła
-    # Musi mieć te same kolumny co tabela obecności
-    bg_df <- as.data.frame(bg_points, geom="XY") %>%
-             rename(decimallongitude = x, decimallatitude = y) %>%
-             mutate(species = "pseudo_absence",
-                    occurrenceStatus = "ABSENT")
-
-    # 4. Dodanie kolumny 'pa' (1 dla obecności, 0 dla tła)
-    presences_final <- presences %>% mutate(pa = 1)
-    absences_final <- bg_df %>% 
-                      select(colnames(presences)) %>% 
-                      mutate(pa = 0)
-
-    # 5. Połączenie
-    combined <- bind_rows(presences_final, absences_final)
-    write.csv(combined, "gbif_pa_combined.csv", row.names = FALSE)
-    """
-}
-
-process SPATIAL_THINNING {
-    conda '${baseDir}/envs/rtatry.yml'
-    publishDir "${params.output_dir}/thinned_data", mode: 'copy'
-
-    input:
-    path "gbif_all.csv"
-
-    output:
-    path "gbif_thinned.csv", emit: thinned_data
-
-    script:
-    """
-    #!/usr/bin/env Rscript
-    library(spThin)
-    library(dplyr)
-
-    df <- read.csv("gbif_all.csv")
-
-    # Przerzedzanie dla każdego gatunku osobno
-    thinned_results <- list()
-    species_list <- unique(df\$species)
-
-    for (sp in species_list) {
-        sp_data <- df %>% filter(species == sp)
-        
-        # Wykonaj przerzedzanie (np. min. 5 km odległości)
-        thin_out <- thin(
-            loc.data = sp_data,
-            lat.col = "decimallatitude",
-            long.col = "decimallongitude",
-            spec.col = "species",
-            thin.dist = 5, # odległość w kilometrach
-            reps = 1,
-            locs.thinned.list.return = TRUE,
-            write.results = FALSE
-        )
-        
-        # Wybierz pierwszy wynik (największa możliwa liczba punktów)
-        thinned_df <- as.data.frame(thin_out[[1]])
-        
-        # Odzyskaj oryginalne kolumny poprzez join
-        sp_thinned <- inner_join(thinned_df, sp_data, 
-                                 by = c("latitude" = "decimallatitude", 
-                                        "longitude" = "decimallongitude"))
-        
-        thinned_results[[sp]] <- sp_thinned
-    }
-
-    final_df <- bind_rows(thinned_results)
-    write.csv(final_df, "gbif_thinned.csv", row.names = FALSE)
-    """
-}
 
 
 
-workflow FEATURES_EXTRACTION {
+workflow BIO_CLIMATIC {
     take:
         dataset_ch
-        dem_tiff
     main:
 
     //Dowload BIOCLIM
@@ -480,15 +263,11 @@ workflow FEATURES_EXTRACTION {
     //PLOT
     PLOT_BIOCLIM(bioclim_ch)
 
-    //dowload data using GEE
-    //gee_ch = GEE_DOWNSCALING_ALPS()
 
     //extract envirmnetal data
     env_data = EXTRACT_ENVIRONMENTAL_DATA(
         dataset_ch,
-        dem_tiff,
         bioclim_ch
-        //gee_ch
         //chelsa_ch.collect(),
         
     )
