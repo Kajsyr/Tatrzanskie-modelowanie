@@ -1,238 +1,52 @@
-// Proces łączący CSV
-process MERGE_CSV {
-    conda "${params.project_envs}/pytatra.yml"
-    publishDir "${params.output_dir}/features/", mode: 'copy'
-    storeDir "${params.cache_dir}/features/", mode: 'copy'
-
-    input:
-        path csv_files
-
-    output:
-        path "merged_results.csv"
-
-    script:
-    """
-    #!/usr/bin/env python
-    import pandas as pd
-    import os
-
-    # csv_files w bashu to lista oddzielona spacjami. 
-    # Python odbierze to jako string, więc robimy z tego listę:
-    files = "${csv_files}".split()
-
-    dfs = []
-    for f in files:
-        df = pd.read_csv(f)
-        # Wybieramy kolumny (używając Twojej logiki iloc)
-        selected = pd.concat([
-            df.iloc[:, [0]],
-            df.iloc[:, [9]],
-            df.iloc[:, 21:24],
-            df.iloc[:, [25]],
-            df.iloc[:, 50:]
-        ], axis=1)
-        dfs.append(selected)
-
-    final_df = pd.concat(dfs, ignore_index=True)
-    final_df.to_csv("merged_results.csv", index=False)
-    """
-}
-
-process DOWNLOAD_BIOCLIM_ALPS {
+process PREPARE_PRESENCE_POINTS {
     conda "${params.project_envs}/rtatra.yml"
-    storeDir "${params.cache_dir}/worldclim_alps"
-
-    output:
-    path "bioclim/"
-
-    script:
-    """
-    #!/usr/bin/env Rscript
-    library(geodata)
-    library(terra)
-
-    bioclim_names <- c(
-        bio1="Annual Mean Temperature (°C)",
-        bio2="Mean Diurnal Range",
-        bio3="Isothermality",
-        bio4="Temperature Seasonality",
-        bio5="Max Temp Warmest Month",
-        bio6="Min Temp Coldest Month",
-        bio7="Temp Annual Range",
-        bio8="Mean Temp Wettest Quarter",
-        bio9="Mean Temp Driest Quarter",
-        bio10="Mean Temp Warmest Quarter",
-        bio11="Mean Temp Coldest Quarter",
-        bio12="Annual Precipitation (mm)",
-        bio13="Precipitation Wettest Month",
-        bio14="Precipitation Driest Month",
-        bio15="Precipitation Seasonality",
-        bio16="Precipitation Wettest Quarter",
-        bio17="Precipitation Driest Quarter",
-        bio18="Precipitation Warmest Quarter",
-        bio19="Precipitation Coldest Quarter"
-    )
-
-
-    # 1. Definicja Twojego obszaru (Bounding Box na podstawie POLYGON)
-    # xmin: 4, xmax: 18, ymin: 43.5, ymax: 48.5
-    roi_ext <- ext(4, 18, 43.5, 48.5)
-
-    # 2. Pobieranie tylko kafla zawierającego Alpy (30x30 stopni)
-    # res = 0.5 (ok. 1km) jest optymalne dla obszarów górskich (Alpy)
-    # Spróbujmy tylko z wokół jednego punktu
-    cat("Pobieranie kafla WorldClim (res=0.5)...\\n")
-    bio_tile <- worldclim_tile(var = "bio", res = 0.5, lon = 11, lat = 46, path = ".")
-
-    # 3. Przycięcie do Twojego obszaru
-    cat("Przycinanie do zadanego poligonu...\\n")
-    bio_alps <- crop(bio_tile, roi_ext)
-
-    #Tworzenie folderu
-    if (!dir.exists("bioclim")) dir.create("bioclim")
-
-    # 4. Zapisywanie warstw jako osobne pliki TIFF
-    # Pętla przejdzie przez wszystkie 19 zmiennych bioclimatycznych
-    for(i in 1:nlyr(bio_alps)) {
-        var_name <- names(bio_alps)[i]
-        writeRaster(bio_alps[[i]], 
-                    filename = paste0("bioclim/alps_", var_name, ".tif"), 
-                    overwrite = TRUE)
-    }
-    cat("Zakończono. Pliki zapisane w cache.\\n")
-    """
-}
-
-process PLOT_BIOCLIM {
-
-    publishDir "${params.output_dir}/plots/", mode: 'copy'
-    conda "${params.project_envs}/rtatra.yml"
-
-    input:
-    path bioclim_dir
-
-    output:
-    path "alps*.png"
-
-    script:
-    """
-    #!/usr/bin/env Rscript
-    library(terra)
-    library(ggplot2)
-
-
-    bioclim_names <- c(
-        bio1="Annual Mean Temperature (°C)",
-        bio2="Mean Diurnal Range",
-        bio3="Isothermality",
-        bio4="Temperature Seasonality",
-        bio5="Max Temp Warmest Month",
-        bio6="Min Temp Coldest Month",
-        bio7="Temp Annual Range",
-        bio8="Mean Temp Wettest Quarter",
-        bio9="Mean Temp Driest Quarter",
-        bio10="Mean Temp Warmest Quarter",
-        bio11="Mean Temp Coldest Quarter",
-        bio12="Annual Precipitation (mm)",
-        bio13="Precipitation Wettest Month",
-        bio14="Precipitation Driest Month",
-        bio15="Precipitation Seasonality",
-        bio16="Precipitation Wettest Quarter",
-        bio17="Precipitation Driest Quarter",
-        bio18="Precipitation Warmest Quarter",
-        bio19="Precipitation Coldest Quarter"
-    )
-
-    # Wczytaj warstwy
-    files <- list.files("${bioclim_dir}", pattern="tif\$", full.names=TRUE)
-
-    #iterowanie po warstwach i zapisywanie do pliku
-    for(f in files){
-        r <- rast(f)
-        name <- tools::file_path_sans_ext(basename(f))
-
-        #szukamy prawdziwej nazwy
-        var_match <- regmatches(name, regexpr("bio_?\\\\d+", name))
-        var <- gsub("_", "", var_match)
-        label <- bioclim_names[[var]]
-
-        df <- as.data.frame(r, xy=TRUE, na.rm=TRUE)
-        colnames(df)[3] <- "value"
-
-        p <- ggplot(df, aes(x=x, y=y, fill=value)) +
-            geom_raster() +
-            coord_equal() +
-            scale_fill_viridis_c() +
-            labs(title=name) +
-            theme_minimal()
-
-        ggsave(paste0(name, ".png"), plot=p, width=8, height=6)
-    }
-
-    """
-}
-
-
-
-process DOWNLOAD_CHELSA_ALPS {
-    conda "${params.project_envs}/rtatra.yml"
-    storeDir "${params.cache_dir}/chelsa_alps"
-
-    output:
-    path "alps_chelsa_*.tif"
-
-    script:
-    """
-    #!/usr/bin/env Rscript
-    library(geodata)
-    library(terra)
-
-    # 1. Definicja obszaru (Bounding Box dla Alp)
-    roi_ext <- ext(4, 18, 43.5, 48.5)
-
-    # 2. Pobieranie danych CHELSA
-    # var = "bio" pobierze 19 zmiennych bioclimatycznych
-    # Uwaga: CHELSA v2.1 jest bardzo dokładna, ale pliki są duże.
-    cat("Pobieranie danych CHELSA (bioclim)...\\n")
     
-    # Pobieramy zmienne bioclimatyczne (bio)
-    # geodata pobierze je do folderu tymczasowego, a my je przytniemy
-    bio_global <- chelsa(var = "bio", res = 0.5, path = ".", download = TRUE)
+    input:
+    path gbif_raw
 
-    # 3. Przycięcie do Twojego obszaru
-    cat("Przycinanie do zadanego poligonu...\\n")
-    bio_alps <- crop(bio_global, roi_ext)
+    output:
+    path "presence_coords.csv"
 
-    # 4. Opcjonalnie: Pobranie insolacji (Solar Radiation)
-    sol_global <- chelsa(var = "sol", res = 0.5, path = ".", download = TRUE)
-    sol_alps <- crop(mean(sol_global), roi_ext) # średnia roczna insolacja
-    names(sol_alps) <- "solar_rad"
-    bio_alps <- c(bio_alps, sol_alps)
-
-    # 5. Zapisywanie warstw
-    for(i in 1:nlyr(bio_alps)) {
-        var_name <- names(bio_alps)[i]
-        writeRaster(bio_alps[[i]], 
-                    filename = paste0("alps_chelsa_", var_name, ".tif"), 
-                    overwrite = TRUE)
-    }
-    cat("Zakończono. Pliki zapisane w cache.\\n")
+    script:
+    """
+    #!/usr/bin/env Rscript
+    library(dplyr)
+    df <- read.csv("${gbif_raw}")
+    
+    # Wybieramy tylko niezbędne kolumny i ujednolicamy nazwy
+    df_clean <- df %>%
+      select(gbifID, decimalLongitude, decimalLatitude)
+    
+    write.csv(df_clean, "presence_coords.csv", row.names = FALSE)
     """
 }
 
-
-process EXTRACT_ENVIRONMENTAL_DATA {
+process BIOCLIM_CONCATENATE {
     conda "${params.project_envs}/rtatra.yml"
-    publishDir "${params.output_dir}/features/", mode: 'copy'
-    storeDir "${params.cache_dir}/features"
+    publishDir "${params.output_features}/bioclim/", mode: 'copy'
+    //storeDir "${params.cache_dir}/features"
+
+    input:
+    path bioclim_data
+
+    output:
+    path "bioclim_all.csv"
+
+    script:
+    """
+    awk 'FNR==1 && NR!=1{next;}{print}' *.csv > bioclim_all.csv
+    """
+}
+
+process BIOCLIM_EXTRACT_DATA {
+    conda "${params.project_envs}/rtatra.yml"
+    publishDir "${params.output_features}/bioclim/", mode: 'copy'
+    //storeDir "${params.cache_dir}/features"
     
     input:
     path gbif_species
-    path dem_tiff
     path bioclim_dir
-    //path gge_dir
-     //path chelsa
-    
+ 
 
     output:
     path "results/*"
@@ -243,7 +57,6 @@ process EXTRACT_ENVIRONMENTAL_DATA {
     extract_env.R \
       --input ${gbif_species} \
      --output results/${gbif_species.simpleName}.csv \
-     --dem ${dem_tiff} \
      --bioclim ${bioclim_dir}/
     """
 }
@@ -251,30 +64,133 @@ process EXTRACT_ENVIRONMENTAL_DATA {
 
 
 
-workflow BIO_CLIMATIC {
+process GEE_POINT_EXTRACTION {
+    publishDir "${params.output_features}/gee/", mode: 'copy'
+    conda "${params.project_envs}/rtatra.yml"
+    tag "${raster.baseName}"
+
+    input:
+        path raster
+        path gatunki
+
+    output:
+    path "*.csv"
+
+    script:
+    """
+    extract_from_raster.R \
+        -i $gatunki \
+        -r $raster \
+        -o ${raster.baseName}.csv
+    """
+}
+
+
+process GEE_JOIN_CSV {
+    publishDir "${params.output_features}/gee/", mode: 'copy'
+    conda "${params.project_envs}/rtatra.yml"
+
+    input:
+    path files 
+
+    output:
+    path "all_gee.csv"
+
+    script:
+    """
+    #!/usr/bin/env Rscript
+    library(dplyr)
+    library(purrr)
+
+    # Pobranie listy plików przekazanych przez Nextflow
+    file_list <- list.files(pattern = "*.csv")
+    
+    # Funkcja wczytująca i łącząca dane
+    final_df <- file_list %>%
+      map(~read.csv(.x, header = TRUE)) %>%
+      reduce(inner_join, by = "gbifID")
+
+    # Zapisanie wyniku
+    write.csv(final_df, "all_gee.csv", row.names = FALSE)
+    """
+}
+
+process CONCATENATE {
+    publishDir "${params.output_features}", mode: 'copy'
+    //storeDir "${params.cache_dir}/features"
+    conda "${params.project_envs}/rtatra.yml"
+
+    input:
+    path bioclim_data
+    path gee_data
+
+    output:
+    path "all_features.csv"
+
+    script:
+    """
+    #!/usr/bin/env Rscript
+    library(dplyr)
+
+    # Wczytywanie danych
+    bioclim_df <- read.csv("${bioclim_data}")
+    gee_df <- read.csv("${gee_data}")
+
+    # Konwersja klucza na typ znakowy (character), aby umożliwić połączenie 
+    # identyfikatorów numerycznych z GBIF i tekstowych z pseudoabsencji
+    bioclim_df <- bioclim_df %>%
+    mutate(gbifID = as.character(gbifID))
+
+    gee_df <- gee_df %>%
+    mutate(gbifID = as.character(gbifID))
+
+    # Wykonanie złączenia
+    final_df <- bioclim_df %>%
+    inner_join(gee_df, by = "gbifID")
+
+    # Zapisanie wyniku
+    write.csv(final_df, "all_features.csv", row.names = FALSE)
+    """
+}
+
+
+
+workflow FEATURES {
     take:
-        dataset_ch
-    main:
-
-    //Dowload BIOCLIM
-    bioclim_ch = DOWNLOAD_BIOCLIM_ALPS()
-    //chelsa_ch = DOWNLOAD_CHELSA_ALPS()
-
-    //PLOT
-    PLOT_BIOCLIM(bioclim_ch)
-
-
-    //extract envirmnetal data
-    env_data = EXTRACT_ENVIRONMENTAL_DATA(
-        dataset_ch,
+        species_dataset_ch // Surowy plik GBIF
+        pseudo_absences_ch // Plik z pseudoabsencjami (już z gbifID, lat, lon)
         bioclim_ch
-        //chelsa_ch.collect(),
-        
-    )
+        gee_tif_ch
+    
+    main:
+    // 1. Przygotowujemy czyste punkty obecności
+    presence_coords_ch = PREPARE_PRESENCE_POINTS(species_dataset_ch)
 
-    merge_env_data=MERGE_CSV(env_data.unique().collect())
+    // 2. Łączymy obecności i pseudoabsencje w JEDEN plik wejściowy dla ekstrakcji
+    // Używamy prostego cat (z pominięciem nagłówka drugiego pliku)
+    combined_points_ch = presence_coords_ch.concat(pseudo_absences_ch)
+        .collect()
+        .map { files -> 
+            def out = file("combined_points.csv")
+            out.text = files[0].text + files[1].readLines()[1..-1].join('\n')
+            return out
+        }
+
+    // 3. Ekstrakcja Bioclim (na połączonym pliku)
+    bioclim_raw = BIOCLIM_EXTRACT_DATA(combined_points_ch, bioclim_ch)
+    bioclim_final = BIOCLIM_CONCATENATE(bioclim_raw.collect())
+
+    // 4. Ekstrakcja GEE (na połączonym pliku)
+    gee_raw = GEE_POINT_EXTRACTION(gee_tif_ch, combined_points_ch)
+    gee_final = GEE_JOIN_CSV(gee_raw.collect())
+
+    bioclim_final.view()
+    gee_final.view()
+
+    // 5. Ostateczne połączenie cech (Join po gbifID)
+    all_features = CONCATENATE(bioclim_final, gee_final)
+
     emit:
-        env_data
-        merge_env_data
-        
+    metadata = species_dataset_ch // Początkowy dataset (metadane)
+    features = all_features       // Plik: gbifID + cechy (obecności + pseudo)
 }

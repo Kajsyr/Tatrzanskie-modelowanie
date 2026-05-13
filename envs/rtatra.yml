@@ -18,6 +18,7 @@ dependencies:
   - r-svglite           # Eksport do formatu SVG
   - r-optparse        # Parsowanie argumentów w skryptach R
   - r-geodata
+  - r-lwgeom  # Dodaj to
   - gdal
   - geos
   - proj

@@ -121,10 +121,6 @@ process PROCESS_DEM {
 }
 
 
-
-
-
-
 process FILTER {
     publishDir "${params.output_dir}", mode: 'copy'
     storeDir "${params.cache_dir}"
@@ -170,6 +166,25 @@ process PLOT {
         --contours ${contours_rds} \
         --species "${spec_name}" \
         --output map_${raw_csv.simpleName}.svg
+    """
+}
+
+process PSEUDO_ABSENCES {
+    publishDir "${params.output_gee}/pseudo_points", mode: 'copy'
+    conda "${params.project_envs}/rtatra.yml"
+
+    input:
+    path shp_rds
+
+    output:
+    path "pseudo_absence.csv"
+
+    script:
+    """
+    generate_pseudo_absence.R \
+        --shp ${shp_rds} \
+        --output pseudo_absence.csv \
+        --count 12525
     """
 }
 
@@ -224,11 +239,14 @@ workflow DATASET{
     //scalanie wszytkich plików csv gatunków w jeden
     final_dataset_ch = MERGE_CSV(valid_gbif_ch.collect())
 
+    //generowanie pseudoabsencji
+    pseudo_absences_ch = PSEUDO_ABSENCES(params.alp_shapefile)
+
 
     emit:
-        species_ch = valid_gbif_ch
         dem_ch = dem_ch.dem_tiff
         full_table = final_dataset_ch
+        pseudo_absences = pseudo_absences_ch
 
 
 }
