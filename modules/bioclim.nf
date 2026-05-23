@@ -174,51 +174,6 @@ process PLOT_BIOCLIM {
 
 
 
-process DOWNLOAD_CHELSA_ALPS {
-    conda "${params.project_envs}/rtatra.yml"
-    storeDir "${params.cache_dir}/chelsa_alps"
-
-    output:
-    path "alps_chelsa_*.tif"
-
-    script:
-    """
-    #!/usr/bin/env Rscript
-    library(geodata)
-    library(terra)
-
-    # 1. Definicja obszaru (Bounding Box dla Alp)
-    roi_ext <- ext(4, 18, 43.5, 48.5)
-
-    # 2. Pobieranie danych CHELSA
-    # var = "bio" pobierze 19 zmiennych bioclimatycznych
-    # Uwaga: CHELSA v2.1 jest bardzo dokładna, ale pliki są duże.
-    cat("Pobieranie danych CHELSA (bioclim)...\\n")
-    
-    # Pobieramy zmienne bioclimatyczne (bio)
-    # geodata pobierze je do folderu tymczasowego, a my je przytniemy
-    bio_global <- chelsa(var = "bio", res = 0.5, path = ".", download = TRUE)
-
-    # 3. Przycięcie do Twojego obszaru
-    cat("Przycinanie do zadanego poligonu...\\n")
-    bio_alps <- crop(bio_global, roi_ext)
-
-    # 4. Opcjonalnie: Pobranie insolacji (Solar Radiation)
-    sol_global <- chelsa(var = "sol", res = 0.5, path = ".", download = TRUE)
-    sol_alps <- crop(mean(sol_global), roi_ext) # średnia roczna insolacja
-    names(sol_alps) <- "solar_rad"
-    bio_alps <- c(bio_alps, sol_alps)
-
-    # 5. Zapisywanie warstw
-    for(i in 1:nlyr(bio_alps)) {
-        var_name <- names(bio_alps)[i]
-        writeRaster(bio_alps[[i]], 
-                    filename = paste0("alps_chelsa_", var_name, ".tif"), 
-                    overwrite = TRUE)
-    }
-    cat("Zakończono. Pliki zapisane w cache.\\n")
-    """
-}
 
 
 workflow BIO_CLIM {
@@ -226,7 +181,6 @@ workflow BIO_CLIM {
 
     //Dowload BIOCLIM
     bioclim_ch = DOWNLOAD_BIOCLIM_ALPS()
-    //chelsa_ch = DOWNLOAD_CHELSA_ALPS()
 
     //Plot BioCLIM
     PLOT_BIOCLIM(bioclim_ch)

@@ -9,7 +9,7 @@ suppressPackageStartupMessages({
   library(CoordinateCleaner)
 })
 
-# 1. Definicja argumentów
+# Definicja argumentów
 option_list <- list(
   make_option(c("-i", "--input"), type="character", default=NULL, 
               help="Ścieżka do pliku CSV z GBIF", metavar="character"),
@@ -27,8 +27,7 @@ if (is.null(opt$input) | is.null(opt$output)) {
   stop("Należy podać argumenty --input oraz --output", call.=FALSE)
 }
 
-# 2. Wczytywanie danych
-# check.names=FALSE i quote="\"" rozwiązują problem X.decimalLongitude.
+# Wczytywanie danych
 gbif_data <- read.delim(opt$input, sep = ",", header = TRUE, 
                         quote = "\"", check.names = FALSE)
 

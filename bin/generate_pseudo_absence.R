@@ -6,7 +6,7 @@
 library(sf)
 library(optparse)
 
-# 1. Konfiguracja argumentów linii komend
+#Konfiguracja argumentów linii komend
 option_list <- list(
   make_option(c("-p", "--shp"), type="character", default=NULL, 
               help="Ścieżka do pliku shapefile (.shp)", metavar="character"),
@@ -21,7 +21,7 @@ opt <- parse_args(opt_parser)
 
 
 
-# 2. Wczytywanie danych
+# Wczytywanie danych
 message(paste("Wczytywanie warstwy:", opt$shp))
 # Wczytywanie warstwy
 shape <- st_read(opt$shp, quiet = TRUE)
@@ -35,7 +35,7 @@ if (is.na(st_crs(shape)) || !identical(current_epsg, 4326L)) {
     shape <- st_transform(shape, 4326)
 }
 
-# Naprawa geometrii (ważne przy złożonych poligonach Alp)
+# Naprawa geometrii 
 shape <- st_make_valid(st_union(shape))
 
 # Losowanie punktów
