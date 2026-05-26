@@ -1,11 +1,9 @@
 # 1. Ignore everything in the root
 work/
-output/plots/
+output/
 .nextflow*
 /cache/
 login.config
 
 # 3. Re-include the .gitignore itself (optional but recommended)
 !.gitignore
-
-
