@@ -1,9 +1,17 @@
-# 1. Ignore everything in the root
-work/
-output/
-.nextflow*
+# 1. Ignoruj wszystko w katalogu głównym i określone foldery
+/*
+/.nextflow*
 /cache/
 login.config
 
-# 3. Re-include the .gitignore itself (optional but recommended)
+# 2. Wyjątki globalne
 !.gitignore
+!output/
+
+# 3. Ignoruj zawartość output/, ale wejdź do features/
+/output/*
+!/output/features/
+
+# 4. Ignoruj wszystko w features/, oprócz pliku all_features.csv
+/output/features/*
+!/output/features/all_features.csv
