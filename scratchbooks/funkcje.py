@@ -30,51 +30,51 @@ def calculate_pca(
 
     z oryginalnymi kolumnami nienumerycznymi.
     """
-    # 1. Usuwamy wiersze z brakami danych
+
+    # Wykluczenie zbanowanych kolumn
+    banned_cols = ["decimalLongitude", "decimalLatitude"]
+    df = df.drop(columns=banned_cols, errors="ignore")
+
+    # Usuwamy wiersze z brakami danych
     df_clean = df.dropna()
 
-    # 2. Separujemy klasę docelową oraz kolumny nienumeryczne
+    # Separujemy klasę docelową oraz kolumny nienumeryczne
     y_clean = df_clean[target_col]
 
-    # Pobieramy wszystkie kolumny nienumeryczne (oprócz targetu, jeśli nim był)
-    df_non_numeric = df_clean.select_dtypes(exclude=[np.number]).drop(
-        columns=[target_col], errors="ignore"
-    )
+
+
 
     # Wybieramy tylko numeryczne cechy do PCA
     X_numeric = df_clean.select_dtypes(include=[np.number]).drop(
         columns=[target_col], errors="ignore"
     )
 
-    # 3. Standaryzacja cech
+    # Standaryzacja cech
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X_numeric)
 
-    # 4. Dynamiczne dopasowanie liczby komponentów
+    # Dynamiczne dopasowanie liczby komponentów
     actual_components = min(
         n_components, X_numeric.shape[0], X_numeric.shape[1]
     )
 
-    # 5. Dopasowanie PCA
+    # Dopasowanie PCA
     pca = PCA(n_components=actual_components)
     X_pca = pca.fit_transform(X_scaled)
 
-    # 6. Procent wyjaśnianej wariancji
+    # Procent wyjaśnianej wariancji
     explained_variance = pca.explained_variance_ratio_ * 100
 
-    # 7. Budowanie DataFrame z komponentami PC
+    #Budowanie DataFrame z komponentami PC
     pc_columns = [f"PC{i+1}" for i in range(actual_components)]
     df_pca_results = pd.DataFrame(
         X_pca, columns=pc_columns, index=df_clean.index
     )
 
-    # 8. Łączenie: nienumeryczne + komponenty PCA
-    df_final = pd.concat([df_non_numeric, df_pca_results], axis=1)
-
     # Mapowanie klasy docelowej
-    df_final["Target_Class"] = y_clean.map({0: "Pseudo-absence", 1: "Presence"})
+    df_pca_results["Target_Class"] = y_clean
 
-    return df_final, explained_variance
+    return df_pca_results, explained_variance
 
 
 # =====================================================================
@@ -83,7 +83,7 @@ def calculate_pca(
 def plot_pca_space(
     df_pca,
     explained_variance,
-    hue_col="Target_Class",  # Dynamiczna kolumna do kolorowania punktów
+    hue_col="Target_Class",  
     title="Wizualizacja przestrzeni cech przy użyciu PC1 i PC2",
     palette=None,
     alpha=0.2,
@@ -91,34 +91,14 @@ def plot_pca_space(
 ):
     """Generuje wykres rozrzutu dla dwóch pierwszych składowych głównych (PC1 i PC2)."""
 
-    # Sprawdzenie czy w przekazanym DataFrame istnieją wymagane składowe
-    if "PC1" not in df_pca.columns or "PC2" not in df_pca.columns:
-        print(
-            "Błąd: Przekazany DataFrame nie zawiera składowych PC1 lub PC2. Uruchom najpierw calculate_pca."
-        )
-        return
-
-    # Sprawdzenie czy wskazana kolumna do kolorowania istnieje w DataFrame
-    if hue_col not in df_pca.columns:
-        print(f"Błąd: Kolumna '{hue_col}' nie istnieje w przekazanym DataFrame.")
-        return
-
-    # Jeśli użytkownik nie podał własnej palety i koloruje domyślną klasę docelową
-    if palette is None and hue_col == "Target_Class":
-        palette = {"Pseudo-absence": "crimson", "Presence": "dodgerblue"}
-    elif palette is None:
-        # Dla innych kolumn (np. ciągłych środowiskowych) używamy wbudowanej mapy kolorów
-        palette = "viridis"
-
     plt.figure(figsize=(10, 8))
 
-    # Wykres rozrzutu za pomocą seaborn z dynamicznym parametrem hue
+    # Wykres rozrzutu 
     sns.scatterplot(
         data=df_pca,
         x="PC1",
         y="PC2",
         hue=hue_col,  # Kolorowanie na podstawie podanej zmiennej
-        palette=palette,
         alpha=alpha,
         edgecolor="w",
         s=s,
