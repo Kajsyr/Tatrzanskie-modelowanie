@@ -120,7 +120,7 @@ def plot_pca_space(
 
 
 
-def df_to_map(df, tytul, col_name_to_color):
+def df_to_map(df, tytul, col_name_to_color, scale="50m"):
     """Generuje mapę z punktami pokolorowanymi według wybranej kolumny (klastry lub gatunki).
 
     df - DataFrame z danymi (musi zawierać 'decimalLongitude' i 'decimalLatitude')
