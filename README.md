@@ -1,5 +1,7 @@
-# Pozyskanie warstwy z Google Eart Engine (GEE)
+# Przeidywanie występowanie wybranych gatunków Alpejskich
 
-# Pozyskanie lokalizacji gatunków z Global Biodiversity Information Facility (GBIF)
+## Pozyskanie warstwy z Google Eart Engine (GEE)
 
-# Wybór Warstw do modelu
+## Pozyskanie lokalizacji gatunków z Global Biodiversity Information Facility (GBIF)
+
+## Wybór Warstw do modelu
