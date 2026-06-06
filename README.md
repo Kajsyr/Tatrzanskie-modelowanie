@@ -373,7 +373,7 @@ Do trenowania używaliśmy RandomizedSearchCV z sklearn.
 Wytrenowaliśmy trzy modele:
 1. Random Forest, który przewiduje wektor z Y^N. Gdzie N to liczba gatunków.
 2. Model RF podobny do 1, ale taki, w którym obszary z foldów testowych są z innych bloków (większych obszarów) niż obszary z foldów treningowych. Chcieliśmy w ten sposób uniknąć sytuacji, w której klaster 'z jednego końca polany' jest w secie treningowym, a klaster 'z drugiego końca tej samej polany' jest w secie testowym.
-3. Model, który tak naprawdę jest zlepkiem N modeli RF, w którym każdy model przewiduje jedną liczbę. Chcieliśmy porównać, jak to wpłynie na czas treningu oraz na jakość predykcji.
+3. "N*Y" - Model, który tak naprawdę jest zlepkiem N modeli RF, w którym każdy model przewiduje jedną liczbę. Chcieliśmy porównać, jak to wpłynie na czas treningu oraz na jakość predykcji. Znowu groupkfold po blokach.
 
 
 
@@ -396,10 +396,17 @@ Jako najważniejsza cecha wybiła się bio_9, czyli "Mean Temp Driest Quarter". 
 
 Totalnie nieważne okazały się zmienne Slope i Curvature. Co ciekawe "wizualna" ocena na density plot wskazuje na podobieństwo rozkładów losowych punktów i punktów z obserwacji. Więc, być może to już samo w sobie było przesłanką do odrzucenia ich z uczenia. Z drugiej strony Slope i Curvature używane do uczenia to tak naprawdę średnia dla klastra, więc może, dla klastrów gdzie n>1, zatarła się ważna informacja, w co raczej wątpimy.
 
-### Wyniki
+### Wyniki i wnioski
 
+Suche wyniki wyprintowane w outputach notebooku 02_Learning.ipynb.
+![dumbbell](plots//dumbbell.png)
 
+Pierwsze co widać, to to, że pierwszy model dla większości gatunków wystrzelił wyższy wynik.
+Drugi i trzeci model mają w miarę podobne wyniki, dlatego będziemy mówić tylko o pierwszym i drugim. Ale najpierw jeszcze zauważymy, że jest to dobra informacja, ponieważ oba modele Y^N trenowały się dużo krócej niż N*Y. Jest to ciekawy wynik do zapamiętania, jeżeli chodzi o optymalizację kodu wynik/czas. Choć pewnie nie będzie to prawda dla każdego zestawu danych. Tutaj się sprawdza.
 
+Druga sprawa, która jest w naszej ocenie najciekawszym wynikiem to to, że lift spada znacząco kiedy pogrupujemy foldy tak, aby nie testować klastrach, które są blisko klastrów treningowych. Czyli random-split może nam przekłamać model. Mało przekłamuje dla Linaria alpina, a 
+
+Ciężko nam oceniać nasze wyniki jako wyniki z modelowania niszy ekologicznej, bo nie znamy się na tym i brakowało nam porównania ze state-of-art modelami.
 
 # Uwagi:
 - Deduplikacja rekordów powinna nastąpić przed feature selection.
