@@ -88,13 +88,113 @@ Export.image.toAsset({
   maxPixels: 1e13
 });
 ```
-## B. Dynamika Śnieżna (Snow Duration)
+<details>
+
+## Zaleganie śniegu
 Czas zalegania okrywy śnieżnej ma fundamentalne znaczenie dla wegetacji roślin alpejskich. Warstwa przedstawia procentowy czas zalegania śniegu w okresie wiosenno-letnim (01.03.2023 – 30.06.2023). Skrypt maskuje chmury przy użyciu pasma SCL (Scene Classification Layer), oblicza wskaźnik NDSI (Normalized Difference Snow Index), a następnie wyznacza średnią częstość występowania pokrywy śnieżnej (NDSI > 0.4).
 
 <details>
 <summary><b>Rozwiń kod GEE (Sentinel-2 Indices)</b></summary>
+
 ```java
+//Shapefile alpy
+var alpy_shp = ee.FeatureCollection("projects/lofty-complex-481222-k8/assets/alpy_shp");
+var region = alpy_shp.geometry();
+
+// FUNKCJA MASKUJĄCA CHMURY I CIEŃ (Używa natywnego pasma SCL z Sentinel-2)
+function maskCloudsS2(image) {
+  var scl = image.select('SCL');
+  var mask = scl.neq(3).and(scl.neq(8)).and(scl.neq(9)).and(scl.neq(10));
+  return image.updateMask(mask);
+}
+
+// Dane z copernicus usuwamy chmury
+var s2_snow = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
+    .filterBounds(region)
+    .filterDate('2023-03-01', '2023-06-30')
+    .map(maskCloudsS2); // Maskujemy pojedyncze chmury na każdym zdjęciu
+
+// Funkcja obliczająca NDSI
+var addNDSI = function(image) {
+  var ndsi = image.normalizedDifference(['B3', 'B11']).rename('NDSI');
+  return image.addBands(ndsi);
+};
+
+// Obliczenie prawdopodobieństwa wystąpienia śniegu (BEZ NaN)
+var snowProbability = s2_snow.map(addNDSI)
+    .map(function(img) {
+      return img.select('NDSI').gt(0.4).rename('snow_mask');
+    })
+    .mean() 
+    .multiply(100)
+    .byte()
+    .unmask(0) // ewentualne pozostałe braki danych (NaN) na wartość 0
+    .rename('Snow_Duration_Pct');
+
+//WIZUALIZACJA NA MAPIE
+var snowVis = {
+  min: 0,
+  max: 100,
+  palette: ['000000', '0d0887', '7e03a8', 'cc4778', 'f89441', 'eff821', 'ffffff']
+};
+
+Map.centerObject(alpy_shp, 6);
+Map.addLayer(snowProbability.clip(region), snowVis, 'Czas zalegania śniegu (%) - Bez NaN');
 ```
+## Właściwości Glebowe
+Właściwości edaficzne pobrane z fizykochemicznej bazy danych SoilGrids (średnia dla warstwy powierzchniowej 0-5 cm) oraz globalnej mapy litologicznej USGS. Pozwalają one ująć w modelu preferencje podłoża u roślin (np. gatunki acydofilne i kalcyfilne).
+
+* Soil_pH – odczyn gleby (wartości przemnożone przez 10).
+
+* Soil_Organic_Carbon – zawartość węgla organicznego w glebie (indykator miąższości próchnicy).
+
+* Soil_Sand - zawartość piasku
+* Soil_Clay – zawartość gliny
+
+<details>
+
+<summary>Kod GEE<summary>
+
+```java
+var alpy_shp = ee.FeatureCollection("projects/lofty-complex-481222-k8/assets/alpy_shp");
+var region = alpy_shp.geometry();
+
+// pH (0-5cm) - wartości x10
+var ph = ee.Image("projects/soilgrids-isric/phh2o_mean")
+    .select('phh2o_0-5cm_mean')
+    .clip(region)
+    .rename('Soil_pH');
+
+// Węgiel organiczny (0-5cm) - próchnica
+var soc = ee.Image("projects/soilgrids-isric/soc_mean")
+    .select('soc_0-5cm_mean')
+    .clip(region)
+    .rename('Soil_Organic_Carbon');
+
+// Tekstura piasek
+var sand = ee.Image("projects/soilgrids-isric/sand_mean")
+    .select('sand_0-5cm_mean')
+    .clip(region)
+    .rename('Soil_Sand');
+
+//Tekstrua glina
+var clay = ee.Image("projects/soilgrids-isric/clay_mean")
+    .select('clay_0-5cm_mean')
+    .clip(region)
+    .rename('Soil_Clay');
+
+//Skały macierzyste
+var usgs_litho = ee.Image("USGS/Global_Lithology/V1")
+    .select('b1') 
+    .clip(region)
+    .rename('Lithology');
+
+var soilLithoStack = ee.Image.cat([ph, soc, sand, clay, usgs_litho]).clip(region).float();
+
+```
+    
+</details>
+
 
 ## Morfometria Terenu 
 
