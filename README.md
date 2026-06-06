@@ -401,7 +401,9 @@ Jako najważniejsza cecha wybiła się bio_9, czyli "Mean Temp Driest Quarter". 
 Totalnie nieważne okazały się zmienne Slope i Curvature. Co ciekawe "wizualna" ocena na density plot wskazuje na podobieństwo rozkładów losowych punktów i punktów z obserwacji. Więc, być może to już samo w sobie było przesłanką do odrzucenia ich z uczenia. Z drugiej strony Slope i Curvature używane do uczenia to tak naprawdę średnia dla klastra, więc może, dla klastrów gdzie n>1, zatarła się ważna informacja, w co raczej wątpimy.
 
 ### Wyniki i wnioski
+
 ---
+
 Suche wyniki wyprintowane w outputach notebooku 02_Learning.ipynb.
 ![dumbbell](plots//dumbbell.png)
 
