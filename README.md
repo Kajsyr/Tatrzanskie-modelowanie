@@ -412,7 +412,8 @@ Druga sprawa, która jest w naszej ocenie najciekawszym wynikiem to to, że lift
 Chętnie pociągnęlibyśmy ten wątek dalej i patrzyli jak zmienia się ten spadek w zależności od przyjętych rozmiarów bloków (a być może nawet od przyjętego rozmiaru klastrowania).
 
 ---
-Chcąć sprawdzić jakoś użyteczność tych modeli wrzuciliśmy do pierwszego z nich losowe punkty z mapy (wcześniej odfiltrowaliśmy te, które są blisko obserwacji używając BallTree).
+
+Chcąc sprawdzić jakoś użyteczność tych modeli wrzuciliśmy do pierwszego z nich losowe punkty z mapy (wcześniej odfiltrowaliśmy te, które są blisko obserwacji używając BallTree).
 Poniżej wykres liczby 1 według modelu dla różnego progu prawdopobieństwa:
 
 ![threshold](plots/threshold_on_random.png)
