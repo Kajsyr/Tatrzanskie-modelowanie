@@ -348,4 +348,64 @@ Następnie dla stanowisk określono listę cech z warstw z GEE oraz z Bioclim. B
 ![Histogramy](plots/feature_histograms.png)
 
 
+## Uczenie
+Szczegóły etapu uczenia w pliku [02_Learning](02_Learning.ipynb)
+Do uczenia wybrano tylko te gatunki, dla których mieliśmy więcej niż 500 obserwacji. Końcowa liczba gatunków używana do uczenia wyniosła 9 i zbiór ten był całkiem niezbalansowany (poniżej wykres):
+![n_obserwacji](plots/hist_obserwacji.png).
+
+### Przygotowanie rekordu od uczenia
+Jako rekordów nie traktowano pojedynczych obserwacji.
+Zamiast tego staraliśmy się zdefiniować "obszary". Dyskutowaliśmy dwie opcje: 1. Grid na mapie. Wszystkie obserwacje w gridzie zostają włączone jako obserwacje z grida. 2. DBscan po koordynatach.
+Ostatecznie wybraliśmy opcję dbscan jako sensowniejszą geograficznie, choć ryzykowniejszą, gdyby obserwacje układały się w jakieś duże struktury. Natomiast liczba obserwacji w naszych klastrach była koniec końców raczej sensowna (<16). Liczba klastrów wyniosła 6905.
+Zmienne środowiskowe dla klastra ustanowiliśmy jako średnią z obserwacji w klastrze. Dla większości naszych zmiennych jest to raczej sensowne przybliżenie klimatu w małych klastrach. Natomiast dla niektórych zmiennych, zwłaszcza tych związanych z ukształtowaniem terenu może gubić sensowne informacje.
+
+W ten sposób dla wszystkich naszych rekordów istnieje przynajmniej jeden gatunek, który został "w tym rekordzie" zaobserwowany.
+Mamy, więc pewność, że był tam jakiś obserwator. Jeżeli jednocześnie nie mamy z tego miejsca rekordu o wystąpieniu innego gatunku, możemy przyjąć, że go tam nie ma. Oczywiście w ten sposób traktujemy to jako układ statyczny, bez żadnej strzałki czasu.
+Drugie założenie, które w ten sposób poczyniamy to przyjęcie braku interakcji między gatunkami.
+Można to założenie zaatakować sprawdzając czy gatunki zajmują podobne nisze klimatyczne (czy dobrze się klastrują w tej domenie), a czy mimo to nie występują razem. Wtedy mamy np. znaczącą wskazówkę co do konkurencji między nimi.
+Z drugiej strony moglibyśmy też po prostu uwzględnić obecność innych gatunków w danym miejscu jako zmienną do predykcji dla tego jednego gatunku.
+Niestety nie zajmowaliśmy się tym tutaj, a jako robocze przybliżenie założyliśmy, że tych interakcji nie ma, choć spojrzeliśmy sobie na kilka metryk (korelację Pearsona, pointwise-mutual-information i prawdopodobieństwo warunkowe) z czystej ciekawości (heatmapy w 02_Learning.ipynb), ale bez uzupełnienia tego o klastrowanie po klimacie nie wiedzieliśmy co możemy z tymi wielkościami zrobić, a na porządną analizę tego typu zależności brakło nam czasu. Na pewno byłoby to ciekawe rozszerzenie projektu.
+
+### Modele
+Model trenowany na 5-foldach. Nie wydzielaliśmy danych testowych, bo uznaliśmy, że cross-validation jest wystarczająca. Choć możliwe, że jeden testowy (taki 100% agnostyczny) przydałby się do porównania między modelami.
+Do trenowania używaliśmy RandomizedSearchCV z sklearn.
+
+Wytrenowaliśmy trzy modele:
+1. Random Forest, który przewiduje wektor z Y^N. Gdzie N to liczba gatunków.
+2. Model RF podobny do 1, ale taki, w którym obszary z foldów testowych są z innych bloków (większych obszarów) niż obszary z foldów treningowych. Chcieliśmy w ten sposób uniknąć sytuacji, w której klaster 'z jednego końca polany' jest w secie treningowym, a klaster 'z drugiego końca tej samej polany' jest w secie testowym.
+3. Model, który tak naprawdę jest zlepkiem N modeli RF, w którym każdy model przewiduje jedną liczbę. Chcieliśmy porównać, jak to wpłynie na czas treningu oraz na jakość predykcji.
+
+
+
+### Metryki
+W czasie pierwszych próbnych podejść dostawaliśmy błąd na uczeniu spowodowany obliczaniem recall, albo precyzji. Doszliśmy do wniosku (nie bez pytania llma, że może chodzić o zera w testowym foldzie). Metryka w tego typu zadaniach jest nieoczywista. f1-score się nam nie spodobał. O tyle o ile precyzja TP/(TP+FP) jest całkiem sensowna, bo rośnie gdy mamy mało false positiwów, to recall nie jest aż tak interesujący bo mówi nam o propocji TP/(TP+FN). Duża liczba false negatiwów nas aż tak nie boli, jak mogłaby nas boleć duża liczba false positiwów.
+
+Jako metrykę, którą optymalizujemy w modelu (argument scoring) wybraliśmy średnią dla wszystkich gatunków z wartości average_precision_score (z sklearn) uśredniony po wszystkich foldach, ale tych, w których zaobserwowaliśmy przynajmniej jedną jedynkę dla gatunku. Dla szczegółów odsyłamy do funkcji map_scorer().
+
+average_precision_score (AP) to suma po wartościach precyzji dla różnych progów recallu. Suma ważona przez różnicę w progach. Czyli im więcej jedynek będzie miało wyższe precision niż zera tym AP będzie większe. Dla niezbalansowanych danych losowe rozrzucenie danych odpowiada AP=propocji jedynek. Dlatego będziemy normalizować:
+lift = (AP-base)/(1-base), gdzie base to propocja jedynek. Dla losowego rozrzucenia mamy lift=0. Dla idealnego AP mamy lift=1.
+
+
+### Feature importance dla pierwszego modelu
+Ważność cech sprawdziliśmy w oparciu o metodę permutacyjną. Patrzyliśmy jak zmienia się wartość map_scorer() kiedy spermutujemy wartości danej cechy.
+Ważność sprawdziliśmy jedynie dla pierwszego modelu (poniżej barplot).
+
+![feat_importance](plots/feature_importance_rf1.png)
+
+Jako najważniejsza cecha wybiła się bio_9, czyli "Mean Temp Driest Quarter". Co jest ciekawe samo w sobie, natomiast wynika to też z odrzucenia innych zmiennych podobnego typu w czasie feature selection.
+
+Totalnie nieważne okazały się zmienne Slope i Curvature. Co ciekawe "wizualna" ocena na density plot wskazuje na podobieństwo rozkładów losowych punktów i punktów z obserwacji. Więc, być może to już samo w sobie było przesłanką do odrzucenia ich z uczenia. Z drugiej strony Slope i Curvature używane do uczenia to tak naprawdę średnia dla klastra, więc może, dla klastrów gdzie n>1, zatarła się ważna informacja, w co raczej wątpimy.
+
+### Wyniki
+
+
+
+
+# Uwagi:
+- Deduplikacja rekordów powinna nastąpić przed feature selection.
+- Obserwacje zostały zbinaryzowane, deduplikacja + łączenie sąsiednich rekordów z tego samego gatunku. Zamiast tego
+możnaby przypisać temu jakąś wagę. Jeżeli mamy więcej rekordów z tego miejsca to być może panują tam lepsze warunki. Z drugiej strony unikamy problemu powielonych obserwacji lub celowo pominiętych osobników, kiedy obserwator tak naprawdę spotkał większą ich liczbę.
+
+
+
 
