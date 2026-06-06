@@ -357,7 +357,7 @@ Szczegóły etapu uczenia w pliku [02_Learning](02_Learning.ipynb)
 Do uczenia wybrano tylko te gatunki, dla których mieliśmy więcej niż 500 obserwacji. Końcowa liczba gatunków używana do uczenia wyniosła 9 i zbiór ten był całkiem niezbalansowany (poniżej wykres):
 ![n_obserwacji](plots/hist_obserwacji.png).
 
-### Przygotowanie rekordu od uczenia
+### Przygotowanie rekordów do uczenia
 Jako rekordów nie traktowano pojedynczych obserwacji.
 Zamiast tego staraliśmy się zdefiniować "obszary". Dyskutowaliśmy dwie opcje: 1. Grid na mapie. Wszystkie obserwacje w gridzie zostają włączone jako obserwacje z grida. 2. DBscan po koordynatach.
 Ostatecznie wybraliśmy opcję dbscan jako sensowniejszą geograficznie, choć ryzykowniejszą, gdyby obserwacje układały się w jakieś duże struktury. Natomiast liczba obserwacji w naszych klastrach była koniec końców raczej sensowna (<16). Liczba klastrów wyniosła 6905.
