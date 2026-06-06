@@ -397,16 +397,29 @@ Jako najważniejsza cecha wybiła się bio_9, czyli "Mean Temp Driest Quarter". 
 Totalnie nieważne okazały się zmienne Slope i Curvature. Co ciekawe "wizualna" ocena na density plot wskazuje na podobieństwo rozkładów losowych punktów i punktów z obserwacji. Więc, być może to już samo w sobie było przesłanką do odrzucenia ich z uczenia. Z drugiej strony Slope i Curvature używane do uczenia to tak naprawdę średnia dla klastra, więc może, dla klastrów gdzie n>1, zatarła się ważna informacja, w co raczej wątpimy.
 
 ### Wyniki i wnioski
-
+---
 Suche wyniki wyprintowane w outputach notebooku 02_Learning.ipynb.
 ![dumbbell](plots//dumbbell.png)
 
 Pierwsze co widać, to to, że pierwszy model dla większości gatunków wystrzelił wyższy wynik.
 Drugi i trzeci model mają w miarę podobne wyniki, dlatego będziemy mówić tylko o pierwszym i drugim. Ale najpierw jeszcze zauważymy, że jest to dobra informacja, ponieważ oba modele Y^N trenowały się dużo krócej niż N*Y. Jest to ciekawy wynik do zapamiętania, jeżeli chodzi o optymalizację kodu wynik/czas. Choć pewnie nie będzie to prawda dla każdego zestawu danych. Tutaj się sprawdza.
 
-Druga sprawa, która jest w naszej ocenie najciekawszym wynikiem to to, że lift spada znacząco kiedy pogrupujemy foldy tak, aby nie testować klastrach, które są blisko klastrów treningowych. Czyli random-split może nam przekłamać model. Mało przekłamuje dla Linaria alpina co początkowo uznaliśmy za skutek tego, że jest to najliczniejszy gatunek, ale raczej nie jest to trend, więc nie będziemy takich wniosków tutaj wysuwać.
+Druga sprawa, która jest w naszej ocenie najciekawszym wynikiem to to, że lift spada znacząco kiedy pogrupujemy foldy tak, aby nie testować na klastrach, które są blisko klastrów treningowych. Czyli random-split może nam przekłamać model. Mało przekłamuje dla Linaria alpina co początkowo uznaliśmy za skutek tego, że jest to najliczniejszy gatunek, ale raczej nie jest to trend, więc nie będziemy takich wniosków tutaj wysuwać.
+Chętnie pociągnęlibyśmy ten wątek dalej i patrzyli jak zmienia się ten spadek w zależności od przyjętych rozmiarów bloków (a być może nawet od przyjętego rozmiaru klastrowania).
 
-Być może różnice w spadkach między gatunkami da się wytłumaczyć jakimiś zmiennymi klimatycznymi. Ale 
+---
+Chcąć sprawdzić jakoś użyteczność tych modeli wrzuciliśmy do pierwszego z nich losowe punkty z mapy (wcześniej odfiltrowaliśmy te, które są blisko obserwacji używając BallTree).
+Poniżej wykres liczby 1 według modelu dla różnego progu prawdopobieństwa:
+
+![threshold](plots/threshold_on_random.png)
+
+Widzimy coś bardzo informatywnego: Linaria alpina jest najsłabiej wymodelowana. Przez to, że ma wysoką obecność w danych wymaga dużego progu. Pozostałe modele są bardzo ostrożne i niskie progi już odcinają nam dużo "zer".
+Podejrzewamy, że możnaby to jakoś ustabilizować dla Linaria używając tła z dużą liczbą zer lub obserwacji z innych gatunków, równie licznych lub takich, których byśmy nie modelowali, a jedynie brali punkty z mapy jako miejsca, w których był obserwator.
+---
+
+
+### Dywagacje
+Być może różnice w spadkach między gatunkami da się wytłumaczyć jakimiś zmiennymi klimatycznymi. Ale nie sprawdziliśmy tego.
 
 Ciężko nam oceniać nasze wyniki jako wyniki z modelowania niszy ekologicznej, bo nie znamy się na tym i brakowało nam porównania ze state-of-art modelami.
 
