@@ -382,7 +382,7 @@ W czasie pierwszych próbnych podejść dostawaliśmy błąd na uczeniu spowodow
 
 Jako metrykę, którą optymalizujemy w modelu (argument scoring) wybraliśmy średnią dla wszystkich gatunków z wartości average_precision_score (z sklearn) uśredniony po wszystkich foldach, ale tych, w których zaobserwowaliśmy przynajmniej jedną jedynkę dla gatunku. Dla szczegółów odsyłamy do funkcji map_scorer().
 
-average_precision_score (AP) to suma po wartościach precyzji dla różnych progów recallu. Suma ważona przez różnicę w progach. Czyli im więcej jedynek będzie miało wyższe precision niż zera tym AP będzie większe. Dla niezbalansowanych danych losowe rozrzucenie danych odpowiada AP=propocji jedynek. Dlatego będziemy normalizować:
+average_precision_score (AP) to suma po wartościach precyzji dla różnych progów recallu. Suma ważona przez przyrost w recall. Czyli im więcej jedynek będzie miało wyższe precision niż zera tym AP będzie większe. Dla niezbalansowanych danych losowe rozrzucenie danych odpowiada AP=propocji jedynek. Dlatego będziemy normalizować:
 lift = (AP-base)/(1-base), gdzie base to propocja jedynek. Dla losowego rozrzucenia mamy lift=0. Dla idealnego AP mamy lift=1.
 
 
