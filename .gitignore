@@ -8,6 +8,7 @@ login.config
 !.gitignore
 !output/
 !plots/
+!01_feature_selection.ipynb
 
 # 3. Ignoruj zawartość output/, ale wejdź do features/
 /output/*
