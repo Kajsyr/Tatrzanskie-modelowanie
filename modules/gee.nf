@@ -106,6 +106,25 @@ process DOWNLOAD_SOIL {
     """
 }
 
+process DOWNLOAD_MINERAL_SUITE {
+    storeDir "${params.cache_gee}/mineral_suite"
+    conda "${params.project_envs}/geedim.yml"
+
+    output:
+    path "*.tif"
+
+    script:
+    """
+    geedim download \
+            -i projects/lofty-complex-481222-k8/assets/mineral_suite_alpy \
+            --scale 20 \
+            --max-requests ${params.max_requests} \
+            --max-tile-size ${params.max_tile_size}
+    mv *.tif mineral_suite.tif
+    """
+}
+
+
 
 workflow GEE {
     main:
@@ -120,12 +139,14 @@ workflow GEE {
         snow_ch = DOWNLOAD_SNOW_COVER()
         eco_features_ch = DOWNLOAD_ECO_FEATURES()
         solar_radiation_ch = DOWNLOAD_SOLAR_RADIATION()
+        mineral_suite_ch = DOWNLOAD_MINERAL_SUITE()
         topographic_suite_ch = DOWNLOAD_TOPOGRAPHIC_SUITE(topographic_bands_ch)
         soil_ch = DOWNLOAD_SOIL(soil_bands_ch)
 
         //take all tif to one channel
         gee_tif_ch = snow_ch.mix(eco_features_ch, 
                                 solar_radiation_ch, 
+                                mineral_suite_ch,
                                 topographic_suite_ch,
                                 soil_ch)
 

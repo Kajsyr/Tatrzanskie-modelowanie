@@ -153,6 +153,103 @@ process CONCATENATE {
     """
 }
 
+process STACK_RASTERS {
+    publishDir "${params.output_features}/rasters/", mode: 'copy'
+    conda "${params.project_envs}/rtatra.yml"
+
+    input:
+    path "gee_layers/*"
+    path "bioclim_layers/*"
+    path alps_shp
+
+    output:
+    path "all_layers_stack.tif"
+
+    script:
+    """
+    #!/usr/bin/env Rscript
+    library(terra)
+
+    # Ustawienie limitu pamięci RAM dla terra (np. max 4GB na ten proces)
+    # Zapobiega to agresywnemu alokowaniu pamięci przez R
+    gdalCache(10000) 
+
+    # 1. Pobranie listy plików TIFF
+    files <- list.files(c("gee_layers", "bioclim_layers"), pattern = "\\\\.tif\$", full.names = TRUE, recursive = TRUE)
+    
+    if (length(files) == 0) {
+        stop("Nie znaleziono żadnych plików TIFF do połączenia!")
+    }
+
+    # 2. Wczytanie i przygotowanie maski Shapefile
+    mask_geom <- vect("${alps_shp.name}")
+
+    # Stworzenie tymczasowego katalogu na docięte warstwy (zwolnienie RAMu)
+    dir.create("tmp_cropped", showWarnings = FALSE)
+
+    # 3. Przygotowanie warstwy referencyjnej (pierwszy plik)
+    first_raster <- rast(files[1])
+    if (crs(mask_geom) != crs(first_raster)) {
+        mask_geom <- project(mask_geom, crs(first_raster))
+    }
+    
+    # Docinanie warstwy referencyjnej i natychmiastowy zapis na dysk
+    ref_raster <- crop(first_raster, mask_geom)
+    ref_raster <- mask(ref_raster, mask_geom)
+    
+    ref_path <- "tmp_cropped/ref_layer.tif"
+    writeRaster(ref_raster, ref_path, overwrite = TRUE)
+    
+    # Odświeżamy uchwyt do pliku, żeby R czytał go z dysku, a nie z RAMu
+    ref_raster <- rast(ref_path)
+
+    # Lista do przechowywania ŚCIEŻEK do plików, a nie samych obiektów w RAMie
+    processed_paths <- list(ref_path)
+
+    # 4. Przetwarzanie sekwencyjne (plik po pliku) z czyszczeniem pamięci
+    if (length(files) > 1) {
+        for (i in 2:length(files)) {
+            message(paste("Przetwarzanie warstwy", i, "z", length(files), ":", files[i]))
+            
+            # Wczytaj bieżący raster
+            current_raster <- rast(files[i])
+            
+            # Wstępne przycięcie do obwiedni (crop), żeby resample nie przetwarzał całego globu
+            current_raster <- crop(current_raster, mask_geom)
+            
+            # Dopasowanie siatki (resample) i maskowanie
+            if (!ext(ref_raster) == ext(current_raster) || !all(res(ref_raster) == res(current_raster))) {
+                current_raster <- resample(current_raster, ref_raster, method = "bilinear")
+            }
+            current_raster <- mask(current_raster, mask_geom)
+            
+            # Zapis dociętego pliku na dysk
+            out_path <- paste0("tmp_cropped/layer_", i, ".tif")
+            writeRaster(current_raster, out_path, overwrite = TRUE)
+            
+            # Zapisujemy tylko ścieżkę tekstową
+            processed_paths[[i]] <- out_path
+            
+            # KLUCZOWE: Usuwamy obiekty i wymuszamy Garbage Collector w R, aby zwolnić RAM
+            rm(current_raster)
+            gc()
+        }
+    }
+
+    # 5. Łączenie na poziomie dysku (Wirtualny Stack)
+    # Podając listę ścieżek tekstowych, rast() nie ładuje danych do RAMu,
+    # tworzy jedynie strukturę metadanych wskazującą na pliki
+    final_paths <- unlist(processed_paths)
+    stacked_raster <- rast(final_paths)
+
+    # 6. Finalny zapis (terra zapisze to blok po bloku, oszczędzając RAM)
+    writeRaster(stacked_raster, "all_layers_stack.tif", overwrite = TRUE)
+    
+    # Czyszczenie plików tymczasowych
+    unlink("tmp_cropped", recursive = TRUE)
+    """
+}
+
 
 
 workflow FEATURES {
@@ -190,7 +287,18 @@ workflow FEATURES {
     // 5. Ostateczne połączenie cech (Join po gbifID)
     all_features = CONCATENATE(bioclim_final, gee_final)
 
+    shapefile_ch = Channel.fromPath(params.alp_shapefile)
+    
+    // Łączymy wszystkie warstwy rastrów w jeden wielowarstwowy TIFF, przycinając do granic Alp
+
+    stacked_tiff_ch = STACK_RASTERS(
+        gee_tif_ch.collect(), 
+        bioclim_ch.collect(), 
+        shapefile_ch
+    )
+
     emit:
     metadata = species_dataset_ch // Początkowy dataset (metadane)
     features = all_features       // Plik: gbifID + cechy (obecności + pseudo)
+    stacked_raster = stacked_tiff_ch    // NOWOŚĆ: Wielowarstwowy plik TIFF
 }
