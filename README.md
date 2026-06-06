@@ -346,7 +346,11 @@ Następnie dla stanowisk określono listę cech z warstw z GEE oraz z Bioclim. B
    
 ![Heatmap](plots/correlation_heatmap_features.png)
 ![Histogramy](plots/feature_histograms.png)
-
+### Feature selesction East-West
+W trakcie wyboru warstw przy pewnym nie radykalnym wyborze zawierajacym sporo warst klimatycznych udało nam się zauwazyć dość wyraźny podziął na oba klastey. Po sklastrowaniu ozkaząło sie że skorelowane są one z rozkładem geogreaficznym. Co ciekawe pokrywa się to z umowną granicą geograficzną pomiedy Alpami Wschodnimi i Zachodnimi wynikającą z geomorfologii.
+![PCA](pca_east_west.png)
+![MAP](mapa_east_west.png)
+Po odcięciu warst skorelowanych ze sobą ten podział znika. Pytanie czy ten podział wynika ze wspóliniowosci i jest fałszywy czy porzzez zbyt rygorytyczne odcinanie warst tracimy informację biologiczną? Nie wiemy.
 
 ## Uczenie
 Szczegóły etapu uczenia w pliku [02_Learning](02_Learning.ipynb)
