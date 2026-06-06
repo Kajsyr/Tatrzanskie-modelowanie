@@ -341,4 +341,7 @@ Nastepnie wyniki zostały poddane walidacji i zostały usunięte punkyt:
 
 Pobrano 17215 rekordów dla 26 gatunków. Po odfiltrowaniu uzyskano 12524 rekordów któ©e zostały przekazaen do dalszej analizy.
 
+## Feature Selection
+Następnie dla punktów 
+![Heatmap](plots/correlation_heatmap_features.png)
 
