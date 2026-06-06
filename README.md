@@ -404,7 +404,9 @@ Suche wyniki wyprintowane w outputach notebooku 02_Learning.ipynb.
 Pierwsze co widać, to to, że pierwszy model dla większości gatunków wystrzelił wyższy wynik.
 Drugi i trzeci model mają w miarę podobne wyniki, dlatego będziemy mówić tylko o pierwszym i drugim. Ale najpierw jeszcze zauważymy, że jest to dobra informacja, ponieważ oba modele Y^N trenowały się dużo krócej niż N*Y. Jest to ciekawy wynik do zapamiętania, jeżeli chodzi o optymalizację kodu wynik/czas. Choć pewnie nie będzie to prawda dla każdego zestawu danych. Tutaj się sprawdza.
 
-Druga sprawa, która jest w naszej ocenie najciekawszym wynikiem to to, że lift spada znacząco kiedy pogrupujemy foldy tak, aby nie testować klastrach, które są blisko klastrów treningowych. Czyli random-split może nam przekłamać model. Mało przekłamuje dla Linaria alpina, a 
+Druga sprawa, która jest w naszej ocenie najciekawszym wynikiem to to, że lift spada znacząco kiedy pogrupujemy foldy tak, aby nie testować klastrach, które są blisko klastrów treningowych. Czyli random-split może nam przekłamać model. Mało przekłamuje dla Linaria alpina co początkowo uznaliśmy za skutek tego, że jest to najliczniejszy gatunek, ale raczej nie jest to trend, więc nie będziemy takich wniosków tutaj wysuwać.
+
+Być może różnice w spadkach między gatunkami da się wytłumaczyć jakimiś zmiennymi klimatycznymi. Ale 
 
 Ciężko nam oceniać nasze wyniki jako wyniki z modelowania niszy ekologicznej, bo nie znamy się na tym i brakowało nam porównania ze state-of-art modelami.
 
