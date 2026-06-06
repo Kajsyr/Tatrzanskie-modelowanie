@@ -417,7 +417,7 @@ Poniżej wykres liczby 1 według modelu dla różnego progu prawdopobieństwa:
 
 ![threshold](plots/threshold_on_random.png)
 
-Widzimy coś bardzo informatywnego: Linaria alpina jest najsłabiej wymodelowana. Przez to, że ma wysoką obecność w danych wymaga dużego progu. Pozostałe modele są bardzo ostrożne i niskie progi już odcinają nam dużo "zer".
+Widzimy coś bardzo informatywnego: Linaria alpina ma najmniej selektywne predykcje. Być może przez to, że ma wysoką obecność w danych wymaga dużego progu. Pozostałe modele są bardzo ostrożne i niskie progi już odcinają nam dużo "zer".
 Podejrzewamy, że możnaby to jakoś ustabilizować dla Linaria używając tła z dużą liczbą zer lub obserwacji z innych gatunków, równie licznych lub takich, których byśmy nie modelowali, a jedynie brali punkty z mapy jako miejsca, w których był obserwator.
 ---
 
