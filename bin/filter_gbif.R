@@ -57,7 +57,7 @@ gbif_clean <- gbif_data %>%
 cat("Liczba rekordów po CoordinateCleaner:", nrow(gbif_clean), "\n")
 
 
-# 4. Filtracja przestrzenna
+# Filtracja przestrzenna
 cat("Filtracja do obszaru Alp...\n")
 shp_alps <- readRDS(opt$shape)
 if (inherits(shp_alps, "SpatVector")) shp_alps <- st_as_sf(shp_alps)
