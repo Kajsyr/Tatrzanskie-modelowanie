@@ -347,3 +347,5 @@ Następnie dla stanowisk określono listę cech z warstw z GEE oraz z Bioclim. B
 ![Heatmap](plots/correlation_heatmap_features.png)
 ![Histogramy](plots/feature_histograms.png)
 
+
+
