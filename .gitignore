@@ -7,6 +7,8 @@ login.config
 # 2. Wyjątki globalne
 !.gitignore
 !output/
+!plots/
+!01_feature_selection.ipynb
 
 # 3. Ignoruj zawartość output/, ale wejdź do features/
 /output/*
